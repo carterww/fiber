@@ -13,24 +13,16 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 
 int fiber_free(struct fiber_pool *pool, uint32_t behavior_flags) { return -1; }
 
-int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num,
-                         uint32_t behavior_flags) {
-  return -1;
-}
-
-int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num,
-                      uint32_t behavior_flags) {
-  return -1;
-}
-
-tpsize fiber_threads_number(struct fiber_pool *pool) { return 0; }
-
-tpsize fiber_threads_working(struct fiber_pool *pool) { return 0; }
-
 void fiber_wait(struct fiber_pool *pool) {}
 
 void fiber_pause(struct fiber_pool *pool) {}
 
 void fiber_resume(struct fiber_pool *pool) {}
 
-qsize fiber_jobs_pending(struct fiber_pool *pool) { return 0; }
+qsize fiber_jobs_pending(struct fiber_pool *pool) {
+  if (pool == NULL || pool->job_queue == NULL ||
+      pool->queue_ops == NULL || pool->queue_ops->length == NULL) {
+    return 0;
+  }
+  return pool->queue_ops->length(pool->job_queue);
+}
