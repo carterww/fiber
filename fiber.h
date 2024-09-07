@@ -24,12 +24,13 @@ struct fiber_thread {
 struct fiber_pool {
   pthread_mutex_t lock;
   jid job_id_prev;
-  void *job_queue;
   const struct fiber_queue_operations *queue_ops;
+  void *job_queue;
   struct fiber_thread *thread_head;
   tpsize threads_number;
   tpsize threads_working;
   sem_t threads_sync;
+  tpsize threads_kill_number;
   uint32_t pool_flags;
 };
 
@@ -65,5 +66,6 @@ void fiber_resume(struct fiber_pool *pool);
 qsize fiber_jobs_pending(struct fiber_pool *pool);
 
 #define FIBER_POOL_FLAG_WAIT (1 << 0)
+#define FIBER_POOL_FLAG_KILL_N (1 << 1)
 
 #endif // _FIBER_H

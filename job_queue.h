@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdint.h>
 
+#define FIBER_CHECK_JID_OVERFLOW 1
 typedef long jid;           // Type to represent Job id
 typedef unsigned int qsize; // Type to represent a queue's size
 #define JOB_ID_MAX LONG_MAX

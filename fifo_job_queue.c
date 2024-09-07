@@ -104,8 +104,11 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer,
 
   struct fifo_jq *fq = (struct fifo_jq *)queue;
   if (flags & FIBER_BLOCK) {
-    while (sem_wait(&fq->jobs_num) == -1 && errno == EINTR)
-      ;
+    while (sem_wait(&fq->jobs_num) == -1) {
+      if (errno == EINTR) {
+        return EINTR; 
+      }
+    }
   } else {
     int try_res = sem_trywait(&fq->jobs_num);
     if (try_res == -1) {
