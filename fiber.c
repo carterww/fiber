@@ -134,7 +134,7 @@ void fiber_free(struct fiber_pool *pool, uint32_t behavior_flags)
 #ifdef FIBER_COMPILE_FIFO
 	if (pool->queue_ops != &def_queue_ops)
 #endif
-	free((struct fiber_queue_operations *)pool->queue_ops);
+		free((struct fiber_queue_operations *)pool->queue_ops);
 }
 
 void fiber_wait(struct fiber_pool *pool)
@@ -417,7 +417,8 @@ static void *worker_loop(void *arg)
 	struct pthread_arg *kit = (struct pthread_arg *)arg;
 	struct fiber_pool *pool = kit->pool;
 	struct fiber_thread *self = kit->self;
-	fiber_queue_pop job_pop = pool->queue_ops->pop;
+	int (*job_pop)(void *, struct fiber_job *, uint32_t) =
+		pool->queue_ops->pop;
 	struct fiber_job job_buf = { 0 };
 
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
