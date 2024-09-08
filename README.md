@@ -20,18 +20,15 @@ This section will be a place to throw all my thoughts related to the program's d
     - It should prioritize idle threads. If there are not enough idle threads to fulfill the request, it should wait until a user job finishes.
 7. The user should be able to wait on all jobs to finish in a blocking manner.
     - This should not prevent jobs from being added to the queue.
-8. The user should be able to resume all paused jobs.
-9. There will be no implementation for removing jobs from the queue.
-10. There will be no implementation for cancelling executing jobs.
+8. There will be no implementation for removing jobs from the queue.
+9. There will be no implementation for cancelling executing jobs.
 ## Non-Functional Requirements
 1. The data structure for storing threads should be a singly linked list.
     - Fiber should attempt to keep groups of threads in contiguous areas of memory. They should be allocated in "extents" to maximize cache hits.
 2. Fiber's thread pool should be completely decoupled from any queue implementation details.
     - The queue operations should be a struct of function pointers set at the pool initialization time.
 3. Fiber should assign an id of some integer type to a job before putting it on the queue.
-4. Fiber should use SIGUSR1 and pthread_kill to signal that a thread should pause.
-5. Fiber should use a semaphore to implement the pause, resume, and wait functions.
-6. In the default job queue implementation, the wall clock time to push a job, pull it off the empty queue, and start execution should be quicker than spinning up a pthread and executing a function.
-7. The only assumption Fiber should make about the system is that POSIX pthreads, POSIX mutexes, POSIX semaphores, and some common atomic operations are available.
+4. In the default job queue implementation, the wall clock time to push a job, pull it off the empty queue, and start execution should be quicker than spinning up a pthread and executing a function.
+5. The only assumption Fiber should make about the system is that POSIX pthreads, POSIX mutexes, POSIX semaphores, and some common atomic operations are available.
     - Atomic integers, compare and swap, and possibly others will be used. The compiler make these available to Fiber.
-8. The default job queue should be a FIFO queue in a contiguous memory space. It will not be resizable after allocation.
+6. The default job queue should be a FIFO queue in a contiguous memory space. It will not be resizable after allocation.
