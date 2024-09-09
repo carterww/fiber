@@ -4,14 +4,16 @@
 #include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
 #include "fiber.h"
 #include "job_queue.h"
 
-#ifdef FIBER_COMPILE_FIFO
+#ifndef FIBER_NO_DEFAULT_QUEUE
 #include "queue_impls/fifo_job_queue.h"
 /* Default queue operations. Used if queue_ops are NULL in init */
-static const struct fiber_queue_operations def_queue_ops = {
+static struct fiber_queue_operations def_queue_ops = {
 	.push = fiber_queue_fifo_push,
 	.pop = fiber_queue_fifo_pop,
 	.init = fiber_queue_fifo_init,
@@ -26,15 +28,27 @@ struct pthread_arg {
 	struct fiber_thread *self;
 };
 
+static void sigusr1_handler(int signum)
+{
+}
+
+// fifo_job_queue.c uses these
+void __fiber_die(const char *msg, int fd, int exit_code);
+int __fiber_mutex_init_get_err(int error);
+int __fiber_sem_init_get_err(int error);
+int __fiber_pthread_create_get_err(int error);
+
+static struct fiber_queue_operations *
+init_queue_ops(struct fiber_queue_operations *ops, void *(*malloc)(size_t));
+static inline jid get_and_update_jid(struct fiber_pool *pool);
+
 /* DECLARATIONS FOR THREAD HELPER FUNCTIONS */
 static int fiber_thread_pool_init(struct fiber_pool *pool,
 				  tpsize threads_number);
 static void fiber_thread_pool_free(struct fiber_pool *pool);
-static void sigusr1_handler(int signum)
-{
-}
-static int thread_ll_alloc_n(struct fiber_thread **head, tpsize threads_number);
-static void thread_ll_free(struct fiber_thread *head);
+static int thread_ll_alloc_n(struct fiber_pool *pool,
+			     struct fiber_thread **head, tpsize threads_number);
+static void thread_ll_free(struct fiber_pool *pool, struct fiber_thread *head);
 static void thread_ll_add(struct fiber_pool *pool, struct fiber_thread *head);
 static int thread_ll_remove(struct fiber_pool *pool,
 			    struct fiber_thread *thread);
@@ -45,47 +59,60 @@ static int worker_pthread_start(struct pthread_arg *arg);
 static void *worker_loop(void *arg);
 static int worker_register_signal_handlers();
 static void handle_flag_wait_all(struct fiber_pool *pool);
-static void wake_next_sleeping_thread(struct fiber_pool *pool,
-				      struct fiber_thread *head);
+static void wake_next_sleeping_thread(struct fiber_pool *pool);
 static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number);
 static void thread_clean_self(struct fiber_pool *pool,
 			      struct fiber_thread *self);
 
-static inline const struct fiber_queue_operations *
-get_queue_ops(struct fiber_queue_operations *ops);
-
-static inline jid get_and_update_jid(struct fiber_pool *pool);
-
 int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts)
 {
-	// TODO: make error codes for these different
 	if (pool == NULL || opts == NULL) {
-		return EINVAL;
+		return FBR_ENULL_ARGS;
 	}
-	if (opts->threads_number == 0 || opts->queue_length == 0) {
-		return EINVAL;
+	if (opts->threads_number < 1 || opts->queue_length < 1) {
+		return FBR_EINVLD_SIZE;
+	}
+	pool->malloc = opts->malloc == NULL ? malloc : opts->malloc;
+	pool->free = opts->free == NULL ? free : opts->free;
+	if (opts->queue_ops == NULL) {
+#ifndef FIBER_NO_DEFAULT_QUEUE
+		pool->queue_ops = &def_queue_ops;
+#else
+		return FBR_EQUEOPS_NONE;
+#endif
+	} else {
+		if (opts->queue_ops->push == NULL ||
+		    opts->queue_ops->pop == NULL ||
+		    opts->queue_ops->init == NULL ||
+		    opts->queue_ops->free == NULL) {
+			return FBR_EQUEOPS_NONE;
+		} else {
+			pool->queue_ops =
+				init_queue_ops(opts->queue_ops, pool->malloc);
+		}
+	}
+	if (pool->queue_ops == NULL) {
+		return FBR_EQUEOPS_NONE;
 	}
 	int error_code = 0;
 	int mutex_res = pthread_mutex_init(&pool->lock, NULL);
 	if (mutex_res != 0) {
-		error_code = mutex_res;
+		error_code = __fiber_mutex_init_get_err(mutex_res);
 		goto err;
 	}
 	pool->job_id_prev = -1;
-	pool->queue_ops = get_queue_ops(opts->queue_ops);
 	pool->pool_flags = 0;
-	if (pool->queue_ops == NULL) {
-		error_code = ENOMEM;
+	if (error_code != 0) {
 		goto err;
 	}
-	int queue_res =
-		pool->queue_ops->init(&pool->job_queue, opts->queue_length);
+	int queue_res = pool->queue_ops->init(
+		&pool->job_queue, opts->queue_length, pool->malloc, pool->free);
 	if (queue_res != 0) {
 		error_code = queue_res;
 		goto err;
 	}
 	if (pool->job_queue == NULL) {
-		error_code = EINVAL;
+		error_code = FBR_EQUE_NULL;
 		goto err;
 	}
 	int tp_init = fiber_thread_pool_init(pool, opts->threads_number);
@@ -100,10 +127,11 @@ err:
 	if (queue_res == 0 && pool->job_queue != NULL)
 		pool->queue_ops->free(pool->job_queue);
 	if (pool->queue_ops != NULL) {
-#ifdef FIBER_COMPILE_FIFO
+#ifndef FIBER_NO_DEFAULT_QUEUE
 		if (pool->queue_ops != &def_queue_ops)
 #endif
-			free((struct fiber_queue_operations *)pool->queue_ops);
+			pool->free((struct fiber_queue_operations *)
+					   pool->queue_ops);
 	}
 	return error_code;
 }
@@ -111,18 +139,18 @@ err:
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		   uint32_t queue_flags)
 {
-	if (pool == NULL || job == NULL) {
-		return EINVAL;
+	if (pool == NULL || job == NULL || job->job_func == NULL) {
+		return FBR_ENULL_ARGS;
 	}
 	job->job_id = get_and_update_jid(pool);
 	int push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
 	if (push_res != 0) {
-		return -1;
+		return FBR_EPUSH_JOB;
 	}
 	return job->job_id;
 }
 
-void fiber_free(struct fiber_pool *pool, uint32_t behavior_flags)
+void fiber_free(struct fiber_pool *pool)
 {
 	if (pool == NULL || pool->queue_ops == NULL ||
 	    pool->job_queue == NULL || pool->queue_ops->free == NULL) {
@@ -131,10 +159,10 @@ void fiber_free(struct fiber_pool *pool, uint32_t behavior_flags)
 	pool->queue_ops->free(pool->job_queue);
 	fiber_thread_pool_free(pool);
 	pthread_mutex_destroy(&pool->lock);
-#ifdef FIBER_COMPILE_FIFO
+#ifndef FIBER_NO_DEFAULT_QUEUE
 	if (pool->queue_ops != &def_queue_ops)
 #endif
-		free((struct fiber_queue_operations *)pool->queue_ops);
+		pool->free((struct fiber_queue_operations *)pool->queue_ops);
 }
 
 void fiber_wait(struct fiber_pool *pool)
@@ -161,43 +189,74 @@ qsize fiber_jobs_pending(struct fiber_pool *pool)
 
 /* THREAD CONTROL/INFO FUNCTIONS */
 
-int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num,
-			 uint32_t behavior_flags)
+int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 {
+	if (pool == NULL) {
+		return FBR_ENULL_ARGS;
+	}
+	if (threads_num < 1) {
+		return FBR_EINVLD_SIZE;
+	}
+	if (pthread_mutex_lock(&pool->lock) != 0) {
+		return EAGAIN;
+	}
+	if (threads_num > pool->threads_number) {
+		threads_num = pool->threads_number;
+	}
+	pthread_mutex_unlock(&pool->lock);
 	// Set flag to notify thread it should commit seppuku
-	__atomic_fetch_add(&pool->threads_kill_number, threads_num,
+	__atomic_add_fetch(&pool->threads_kill_number, threads_num,
 			   __ATOMIC_SEQ_CST);
-	__atomic_fetch_or(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
+	__atomic_or_fetch(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
 			  __ATOMIC_SEQ_CST);
-	wake_next_sleeping_thread(pool, pool->thread_head);
+	wake_next_sleeping_thread(pool);
 	return 0;
 }
 
-int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num,
-		      uint32_t behavior_flags)
+int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 {
+	if (pool == NULL) {
+		return FBR_ENULL_ARGS;
+	}
+	if (threads_num < 1) {
+		return FBR_EINVLD_SIZE;
+	}
+	if (pthread_mutex_lock(&pool->lock) != 0) {
+		return EAGAIN;
+	}
+	if (threads_num + pool->threads_number < 1) {
+		pthread_mutex_unlock(&pool->lock);
+		return FBR_EINVLD_SIZE;
+	}
+	pthread_mutex_unlock(&pool->lock);
 	struct fiber_thread *threads;
-	int error_code = thread_ll_alloc_n(&threads, threads_num);
+	int error_code = thread_ll_alloc_n(pool, &threads, threads_num);
 	if (error_code != 0) {
 		return error_code;
 	}
-	thread_ll_add(pool, threads);
 	int start_res = worker_threads_start(pool, threads, threads_num);
 	if (start_res != 0) {
 		return start_res;
 	}
-	__atomic_fetch_add(&pool->threads_number, threads_num,
+	thread_ll_add(pool, threads);
+	__atomic_add_fetch(&pool->threads_number, threads_num,
 			   __ATOMIC_RELAXED);
 	return 0;
 }
 
 tpsize fiber_threads_number(struct fiber_pool *pool)
 {
+	if (pool == NULL) {
+		return 0;
+	}
 	return __atomic_load_n(&pool->threads_number, __ATOMIC_RELAXED);
 }
 
 tpsize fiber_threads_working(struct fiber_pool *pool)
 {
+	if (pool == NULL) {
+		return THREAD_POOL_SIZE_MAX;
+	}
 	return __atomic_load_n(&pool->threads_working, __ATOMIC_RELAXED);
 }
 
@@ -206,7 +265,7 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 static inline jid get_and_update_jid(struct fiber_pool *pool)
 {
 	// 64 bits will probably never overflow but 32 or less may
-#if JOB_ID_MAX < INT64_MAX || FIBER_CHECK_JID_OVERFLOW != 0
+#if JOB_ID_MAX < INT64_MAX || defined(FIBER_CHECK_JID_OVERFLOW)
 	jid new;
 	// Grab job_id_prev first time. After this, atomic_cmp_ex will load prev with
 	// the current job_id_prev if it fails.
@@ -221,27 +280,20 @@ static inline jid get_and_update_jid(struct fiber_pool *pool)
 	return __atomic_add_fetch(&pool->job_id_prev, 1, __ATOMIC_RELEASE);
 }
 
-static inline const struct fiber_queue_operations *
-get_queue_ops(struct fiber_queue_operations *ops)
+static struct fiber_queue_operations *
+init_queue_ops(struct fiber_queue_operations *ops, void *(*malloc)(size_t))
 {
-	// Return default queue
-	if (ops == NULL) {
-#ifdef FIBER_COMPILE_FIFO
-		return &def_queue_ops;
-#else
-		return NULL;
-#endif
-	}
-	if (ops->push == NULL || ops->pop == NULL || ops->init == NULL ||
-	    ops->free == NULL) {
+	struct fiber_queue_operations *a_ops = malloc(sizeof(*ops));
+	if (a_ops == NULL) {
 		return NULL;
 	}
-	struct fiber_queue_operations *allocd_ops = malloc(sizeof(*ops));
-	if (allocd_ops == NULL) {
-		return NULL;
-	}
-	*allocd_ops = *ops;
-	return allocd_ops;
+	a_ops->push = ops->push;
+	a_ops->pop = ops->pop;
+	a_ops->init = ops->init;
+	a_ops->free = ops->free;
+	a_ops->capactity = ops->capactity;
+	a_ops->length = ops->length;
+	return a_ops;
 }
 
 /* THREAD HELPER FUNCTIONS IMPLEMENTATIONS */
@@ -249,18 +301,15 @@ get_queue_ops(struct fiber_queue_operations *ops)
 static int fiber_thread_pool_init(struct fiber_pool *pool,
 				  tpsize threads_number)
 {
-	int error_code = thread_ll_alloc_n(&pool->thread_head, threads_number);
+	int error_code =
+		thread_ll_alloc_n(pool, &pool->thread_head, threads_number);
 	if (error_code != 0) {
-		goto err;
-	}
-	if (pool->thread_head == NULL) {
-		error_code = EINVAL;
 		goto err;
 	}
 
 	int sem_res = sem_init(&pool->threads_sync, 0, 0);
 	if (sem_res != 0) {
-		error_code = errno;
+		error_code = __fiber_sem_init_get_err(errno);
 		goto err;
 	}
 	pool->threads_number = threads_number;
@@ -275,7 +324,7 @@ static int fiber_thread_pool_init(struct fiber_pool *pool,
 	return 0;
 err:
 	if (pool->thread_head)
-		thread_ll_free(pool->thread_head);
+		thread_ll_free(pool, pool->thread_head);
 	if (sem_res == 0)
 		sem_destroy(&pool->threads_sync);
 	return error_code;
@@ -285,20 +334,21 @@ static void fiber_thread_pool_free(struct fiber_pool *pool)
 {
 	pthread_mutex_lock(&pool->lock);
 	pthread_cancel_n(pool->thread_head, THREAD_POOL_SIZE_MAX);
-	thread_ll_free(pool->thread_head);
+	thread_ll_free(pool, pool->thread_head);
 	sem_destroy(&pool->threads_sync);
 	pthread_mutex_unlock(&pool->lock);
 }
 
-static int thread_ll_alloc_n(struct fiber_thread **head, tpsize threads_number)
+static int thread_ll_alloc_n(struct fiber_pool *pool,
+			     struct fiber_thread **head, tpsize threads_number)
 {
-	*head = malloc(sizeof(**head));
+	*head = pool->malloc(sizeof(**head));
 	if (*head == NULL) {
 		return errno;
 	}
 	struct fiber_thread *curr = *head;
 	for (tpsize i = 1; i < threads_number; ++i) {
-		curr->next = malloc(sizeof(*curr));
+		curr->next = pool->malloc(sizeof(*curr));
 		if (curr->next == NULL) {
 			return errno;
 		}
@@ -308,13 +358,13 @@ static int thread_ll_alloc_n(struct fiber_thread **head, tpsize threads_number)
 	return 0;
 }
 
-static void thread_ll_free(struct fiber_thread *head)
+static void thread_ll_free(struct fiber_pool *pool, struct fiber_thread *head)
 {
 	struct fiber_thread *curr = head;
 	struct fiber_thread *next;
 	while (curr != NULL) {
 		next = curr->next;
-		free(curr);
+		pool->free(curr);
 		curr = next;
 	}
 }
@@ -376,7 +426,7 @@ static int worker_threads_start(struct fiber_pool *pool,
 				struct fiber_thread *head,
 				tpsize threads_number)
 {
-	struct pthread_arg *args = malloc(threads_number * sizeof(*args));
+	struct pthread_arg *args = pool->malloc(threads_number * sizeof(*args));
 	if (args == NULL) {
 		return errno;
 	}
@@ -399,7 +449,7 @@ static int worker_threads_start(struct fiber_pool *pool,
 err:
 	if (i > 0)
 		pthread_cancel_n(head, i - 1);
-	return -1;
+	return error_code;
 }
 
 static int worker_pthread_start(struct pthread_arg *arg)
@@ -407,7 +457,7 @@ static int worker_pthread_start(struct pthread_arg *arg)
 	int error_code =
 		pthread_create(&arg->self->thread_id, NULL, worker_loop, arg);
 	if (error_code != 0) {
-		return errno;
+		return __fiber_pthread_create_get_err(error_code);
 	}
 	return pthread_detach(arg->self->thread_id);
 }
@@ -433,23 +483,28 @@ static void *worker_loop(void *arg)
 			sched_yield();
 			continue;
 		}
-		__atomic_fetch_add(&pool->threads_working, 1, __ATOMIC_RELEASE);
+		__atomic_fetch_add(&pool->threads_working, 1, __ATOMIC_RELAXED);
 
 		do {
 			__atomic_store_n(&self->job_id, job_buf.job_id,
 					 __ATOMIC_RELAXED);
 			job_buf.job_func(job_buf.job_arg);
+			// Should this be atomic load? I don't think it matters
+			if (pool->pool_flags & FIBER_POOL_FLAG_KILL_N) {
+				goto handle_flags;
+			}
 		} while (job_pop(pool->job_queue, &job_buf, 0) == 0);
 		__atomic_store_n(&self->job_id, -1, __ATOMIC_RELAXED);
 
-		__atomic_fetch_sub(&pool->threads_working, 1, __ATOMIC_RELEASE);
+		__atomic_fetch_sub(&pool->threads_working, 1, __ATOMIC_RELAXED);
 handle_flags: {
 	uint32_t pool_flags =
 		__atomic_load_n(&pool->pool_flags, __ATOMIC_SEQ_CST);
 	if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
-		tpsize to_kill = __atomic_load_n(&pool->threads_kill_number,
-						 __ATOMIC_SEQ_CST);
+		tpsize to_kill = __atomic_fetch_sub(&pool->threads_kill_number,
+						    1, __ATOMIC_SEQ_CST);
 		if (to_kill > 0) {
+			wake_next_sleeping_thread(pool);
 			goto exit_thread;
 		} else {
 			uint32_t off = ~FIBER_POOL_FLAG_KILL_N;
@@ -467,7 +522,7 @@ exit_thread:
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	thread_clean_self(pool, self);
 	if (kit)
-		free(kit);
+		pool->free(kit);
 	pthread_exit(0);
 }
 
@@ -489,18 +544,20 @@ static void handle_flag_wait_all(struct fiber_pool *pool)
 	if (tworking > 0) {
 		return;
 	}
-	// TODO: exit here on err because errors caused by post are overflow and not
-	// valid sem
-	sem_post(&pool->threads_sync);
+	if (sem_post(&pool->threads_sync) != 0) {
+		__fiber_die("sem_post error. probably overflow\n",
+			    STDERR_FILENO, 1);
+		return;
+	}
 }
 
-static void wake_next_sleeping_thread(struct fiber_pool *pool,
-				      struct fiber_thread *head)
+static void wake_next_sleeping_thread(struct fiber_pool *pool)
 {
 	int lock_res = pthread_mutex_lock(&pool->lock);
 	if (lock_res != 0) {
 		return;
 	}
+	struct fiber_thread *head = pool->thread_head;
 	while (head != NULL) {
 		jid curr_job_id =
 			__atomic_load_n(&head->job_id, __ATOMIC_SEQ_CST);
@@ -525,16 +582,70 @@ static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number)
 static inline void thread_clean_self(struct fiber_pool *pool,
 				     struct fiber_thread *self)
 {
-	__atomic_fetch_sub(&pool->threads_kill_number, 1, __ATOMIC_RELAXED);
-	struct fiber_thread *next = self->next;
 	int found = thread_ll_remove(pool, self);
 	if (found == 0) {
-		free(self);
+		pool->free(self);
 	}
 	__atomic_fetch_sub(&pool->threads_number, 1, __ATOMIC_RELAXED);
-	tpsize to_kill =
-		__atomic_load_n(&pool->threads_kill_number, __ATOMIC_SEQ_CST);
-	if (to_kill > 0) {
-		wake_next_sleeping_thread(pool, next);
+}
+
+/* INTERNAL MISC FUNCTIONS */
+
+void __fiber_die(const char *msg, int fd, int exit_code)
+{
+	if (fd < 1)
+		fd = STDERR_FILENO;
+	unsigned long len = strlen(msg);
+	write(fd, msg, len);
+	exit(exit_code);
+}
+
+static const char *invalid_error_msg = "__*_get_err cannot take 0\n";
+
+int __fiber_mutex_init_get_err(int error)
+{
+	switch (error) {
+	case 0:
+		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
+		return 0;
+	case EAGAIN: // System did not have resource to init mutx (excluding mem).
+		return FBR_ENO_RSC;
+	case EPERM: // Does not have permission to init mutex
+		return FBR_EPTHRD_PERM;
+	case ENOMEM: // Not enough mem
+	case EBUSY: // Mutex already initialized
+	case EINVAL: // Attr invalid
+	default:
+		return error;
+	}
+}
+
+int __fiber_sem_init_get_err(int error)
+{
+	switch (error) {
+	case 0:
+		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
+		return 0;
+	case EINVAL: // Semaphore value too large
+		return FBR_ESEM_RNG;
+	case ENOSYS: // Don't use pshared, should not encounter.
+	default:
+		return error;
+	}
+}
+
+int __fiber_pthread_create_get_err(int error)
+{
+	switch (error) {
+	case 0:
+		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
+		return 0;
+	case EAGAIN: // Insufficent resources to create another thread
+		return FBR_ENO_RSC;
+	case EPERM: // Permissions erro
+		return FBR_EPTHRD_PERM;
+	case EINVAL: // Invalid attr
+	default:
+		return error;
 	}
 }

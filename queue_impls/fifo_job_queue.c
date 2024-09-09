@@ -1,45 +1,49 @@
-#ifdef FIBER_COMPILE_FIFO
+#ifndef FIBER_NO_DEFAULT_QUEUE
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <stdlib.h>
 
 #include "fifo_job_queue.h"
 #include "../job_queue.h"
+#include <unistd.h>
+
+static const char *sem_post_err_msg =
+	"sem_post returned error. Likely an overflow\n";
+
+// From fiber.c
+extern void __fiber_die(const char *msg, int fd, int exit_code);
+extern int __fiber_mutex_init_get_err(int error);
+extern int __fiber_sem_init_get_err(int error);
 
 static int __fifo_length_semaphores(struct fifo_jq *fq, qsize *out);
 
-// TODO: Need to check for error code in all mutex and semaphore stuff!
-
-int fiber_queue_fifo_init(void **queue, qsize capacity)
+int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
+			  void (*free)(void *))
 {
-	if (queue == NULL) {
-		return EINVAL;
-	}
 	int error_code = 0;
 	struct fifo_jq *fq = malloc(sizeof(*fq));
 	if (fq == NULL) {
-		error_code = errno;
+		error_code = ENOMEM;
 		goto err;
 	}
 	struct fiber_job *jobs = malloc(capacity * sizeof(*jobs));
 	if (jobs == NULL) {
-		error_code = errno;
+		error_code = ENOMEM;
 		goto err;
 	}
 	int mutex_res = pthread_mutex_init(&fq->lock, NULL);
 	if (mutex_res != 0) {
-		error_code = mutex_res;
+		error_code = __fiber_mutex_init_get_err(mutex_res);
 		goto err;
 	}
 	int sem_void_res = sem_init(&fq->void_num, 0, capacity);
 	if (sem_void_res != 0) {
-		error_code = errno;
+		error_code = __fiber_sem_init_get_err(errno);
 		goto err;
 	}
 	int sem_jobs_res = sem_init(&fq->jobs_num, 0, 0);
 	if (sem_jobs_res != 0) {
-		error_code = errno;
+		error_code = __fiber_sem_init_get_err(errno);
 		goto err;
 	}
 
@@ -47,6 +51,7 @@ int fiber_queue_fifo_init(void **queue, qsize capacity)
 	fq->head = 0;
 	fq->tail = 0;
 	fq->capacity = capacity;
+	fq->free = free;
 	*queue = fq;
 
 	return 0;
@@ -66,10 +71,6 @@ err:
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 {
-	if (job == NULL || queue == NULL) {
-		return EINVAL;
-	}
-
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	// Decrement semaphore
 	if (flags & FIBER_BLOCK) {
@@ -92,8 +93,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	pthread_mutex_unlock(&fq->lock);
 	lock_res = sem_post(&fq->jobs_num);
 	if (lock_res != 0) {
-		// TODO: We should kill here in debug because the possible errors
-		// are not a valid semaphore and overflow
+		__fiber_die(sem_post_err_msg, STDERR_FILENO, errno);
 		return lock_res;
 	}
 	return 0;
@@ -101,10 +101,6 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 
 int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 {
-	if (buffer == NULL || queue == NULL) {
-		return EINVAL;
-	}
-
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	if (flags & FIBER_BLOCK) {
 		while (sem_wait(&fq->jobs_num) == -1) {
@@ -129,8 +125,7 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 	pthread_mutex_unlock(&fq->lock);
 	lock_res = sem_post(&fq->void_num);
 	if (lock_res != 0) {
-		// TODO: We should kill here in debug because the possible errors
-		// are not a valid semaphore and overflow
+		__fiber_die(sem_post_err_msg, STDERR_FILENO, errno);
 		return lock_res;
 	}
 	return 0;
@@ -138,9 +133,6 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 
 void fiber_queue_fifo_free(void *queue)
 {
-	if (queue == NULL) {
-		return;
-	}
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	// Make sure nobody else is holding the lock
 	// We just kinda have to assume these won't fail.
@@ -150,10 +142,10 @@ void fiber_queue_fifo_free(void *queue)
 	pthread_mutex_destroy(&fq->lock);
 
 	fq->capacity = 0;
-	free(fq->jobs);
+	fq->free(fq->jobs);
 	sem_destroy(&fq->jobs_num);
 	sem_destroy(&fq->void_num);
-	free(fq);
+	fq->free(fq);
 }
 
 qsize fiber_queue_fifo_capacity(void *queue)
@@ -189,4 +181,4 @@ static int __fifo_length_semaphores(struct fifo_jq *fq, qsize *out)
 	*out = sem_val;
 	return 0;
 }
-#endif
+#endif // FIBER_NO_DEFAULT_QUEUE

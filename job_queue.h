@@ -2,9 +2,9 @@
 #define _FIBER_JOB_QUEUE_H
 
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 
-#define FIBER_CHECK_JID_OVERFLOW 1
 typedef long jid; // Type to represent Job id
 typedef unsigned int qsize; // Type to represent a queue's size
 #define JOB_ID_MAX LONG_MAX
@@ -21,7 +21,8 @@ struct fiber_queue_operations {
 	// Required (Cannot be NULL)
 	int (*push)(void *queue, struct fiber_job *job, uint32_t flags);
 	int (*pop)(void *queue, struct fiber_job *buffer, uint32_t flags);
-	int (*init)(void **queue, qsize capacity);
+	int (*init)(void **queue, qsize capacity, void *(*malloc)(size_t),
+		    void (*free)(void *));
 	void (*free)(void *queue);
 
 	// Optional
@@ -30,5 +31,6 @@ struct fiber_queue_operations {
 };
 
 #define FIBER_BLOCK (1 << 31)
+#define FIBER_NO_BLOCK 0
 
 #endif // _FIBER_JOB_QUEUE_H

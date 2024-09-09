@@ -1,23 +1,26 @@
-#ifdef FIBER_COMPILE_FIFO
+#ifndef FIBER_NO_DEFAULT_QUEUE
 #ifndef _FIBER_FIFO_JOB_QUEUE_H
 #define _FIBER_FIFO_JOB_QUEUE_H
 
 #include <pthread.h>
 #include <semaphore.h>
+#include <stddef.h>
 
 #include "../job_queue.h"
 
 struct fifo_jq {
+	sem_t void_num;
+	sem_t jobs_num;
 	pthread_mutex_t lock;
 	struct fiber_job *jobs;
 	qsize head;
 	qsize tail;
 	qsize capacity;
-	sem_t void_num;
-	sem_t jobs_num;
+	void (*free)(void *);
 };
 
-int fiber_queue_fifo_init(void **queue, qsize capacity);
+int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
+			  void (*free)(void *));
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
 
@@ -30,4 +33,4 @@ qsize fiber_queue_fifo_capacity(void *queue);
 qsize fiber_queue_fifo_length(void *queue);
 
 #endif // _FIBER_FIFO_JOB_QUEUE_H
-#endif // FIBER_COMPILE_FIFO
+#endif // FIBER_NO_DEFAULT_QUEUE
