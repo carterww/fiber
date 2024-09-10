@@ -113,8 +113,8 @@ void fiber_wait(struct fiber_pool *pool);
 /* Get the number of jobs currently waiting to be executed in the job queue.
  * @param pool -> The pool which contains the job queue to check.
  * @returns -> The number of jobs waiting in the queue.
- * @note: This implementation is optional for custom queues. The default queue
- * provides it, but be cautious if using a different implementation.
+ * @error -1 -> Something is null. If using a custom queue implementation,
+ * ensure the "length" function is implemented.
  */
 qsize fiber_jobs_pending(struct fiber_pool *pool);
 
@@ -127,8 +127,8 @@ qsize fiber_jobs_pending(struct fiber_pool *pool);
  *    job from the queue.
  * @param pool -> The pool from which to remove threads.
  * @param threads_num -> The number of threads to remove. If this number is
- * greater than the current number of threads, the number is clamped
- * to the current number of threads.
+ * greater than the current number of threads, all threads in the pool will
+ * be cancelled as well as any newly created threads until the quota is met.
  * @returns -> 0 on succes, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool is NULL.
  * @error FBR_EINVLD_SIZE -> threads_num is less than 1.
@@ -141,8 +141,6 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num);
  * @param threads_num -> The number of threads to add.
  * @returns -> 0 on succes, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool is NULL.
- * @error FBR_EINVLD_SIZE -> threads_num is less than 1 or threads_num +
- * the current number of threads results in integer overflow.
  * @error EAGAIN -> pthread_mutex_lock failed.
  */
 int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num);

@@ -3,12 +3,30 @@
 #include <semaphore.h>
 #include <signal.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "fiber.h"
 #include "job_queue.h"
+
+#ifdef FIBER_ASSERTS
+#define assert(expr, err_msg)                                                 \
+	fprintf(STDERR_FILENO, "ERR: assert failed at %s:%d -> %s", __FILE__, \
+		__LINE__, err_msg);
+#else
+#define assert(expr, err_msg)
+#endif
+
+// Atomic read, update, write that keeps retrying until it can atomically do all.
+#define __fbr_atomic_ruw(type, to_change_ptr, prev, new_expr)                  \
+	type new##type;                                                        \
+	do {                                                                   \
+		new##type = new_expr;                                          \
+	} while (!__atomic_compare_exchange_n(to_change_ptr, &prev, new##type, \
+					      0, __ATOMIC_SEQ_CST,             \
+					      __ATOMIC_SEQ_CST));
 
 #ifndef FIBER_NO_DEFAULT_QUEUE
 #include "queue_impls/fifo_job_queue.h"
@@ -143,6 +161,8 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		return FBR_ENULL_ARGS;
 	}
 	job->job_id = get_and_update_jid(pool);
+	assert(pool->queue_ops != NULL || pool->queue_ops->push != NULL,
+	       "queue_ops or push is null.");
 	int push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
 	if (push_res != 0) {
 		return FBR_EPUSH_JOB;
@@ -153,7 +173,8 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 void fiber_free(struct fiber_pool *pool)
 {
 	if (pool == NULL || pool->queue_ops == NULL ||
-	    pool->job_queue == NULL || pool->queue_ops->free == NULL) {
+	    pool->job_queue == NULL || pool->queue_ops->free == NULL ||
+	    pool->free == NULL) {
 		return;
 	}
 	pool->queue_ops->free(pool->job_queue);
@@ -170,19 +191,19 @@ void fiber_wait(struct fiber_pool *pool)
 	if (pool == NULL) {
 		return;
 	}
-	__atomic_fetch_or(&pool->pool_flags, FIBER_POOL_FLAG_WAIT,
+	__atomic_or_fetch(&pool->pool_flags, FIBER_POOL_FLAG_WAIT,
 			  __ATOMIC_SEQ_CST);
 	while (sem_wait(&pool->threads_sync) != 0 && errno == EINTR)
 		;
 	uint32_t off = ~FIBER_POOL_FLAG_WAIT;
-	__atomic_fetch_and(&pool->pool_flags, off, __ATOMIC_SEQ_CST);
+	__atomic_and_fetch(&pool->pool_flags, off, __ATOMIC_SEQ_CST);
 }
 
 qsize fiber_jobs_pending(struct fiber_pool *pool)
 {
 	if (pool == NULL || pool->job_queue == NULL ||
 	    pool->queue_ops == NULL || pool->queue_ops->length == NULL) {
-		return 0;
+		return -1;
 	}
 	return pool->queue_ops->length(pool->job_queue);
 }
@@ -197,13 +218,6 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (threads_num < 1) {
 		return FBR_EINVLD_SIZE;
 	}
-	if (pthread_mutex_lock(&pool->lock) != 0) {
-		return EAGAIN;
-	}
-	if (threads_num > pool->threads_number) {
-		threads_num = pool->threads_number;
-	}
-	pthread_mutex_unlock(&pool->lock);
 	// Set flag to notify thread it should commit seppuku
 	__atomic_add_fetch(&pool->threads_kill_number, threads_num,
 			   __ATOMIC_SEQ_CST);
@@ -221,14 +235,7 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 	if (threads_num < 1) {
 		return FBR_EINVLD_SIZE;
 	}
-	if (pthread_mutex_lock(&pool->lock) != 0) {
-		return EAGAIN;
-	}
-	if (threads_num + pool->threads_number < 1) {
-		pthread_mutex_unlock(&pool->lock);
-		return FBR_EINVLD_SIZE;
-	}
-	pthread_mutex_unlock(&pool->lock);
+	assert(pool->threads_number + threads_num > 0, "num threads overflow");
 	struct fiber_thread *threads;
 	int error_code = thread_ll_alloc_n(pool, &threads, threads_num);
 	if (error_code != 0) {
@@ -266,16 +273,9 @@ static inline jid get_and_update_jid(struct fiber_pool *pool)
 {
 	// 64 bits will probably never overflow but 32 or less may
 #if JOB_ID_MAX < INT64_MAX || defined(FIBER_CHECK_JID_OVERFLOW)
-	jid new;
-	// Grab job_id_prev first time. After this, atomic_cmp_ex will load prev with
-	// the current job_id_prev if it fails.
 	jid prev = __atomic_load_n(&pool->job_id_prev, __ATOMIC_SEQ_CST);
-	// Detect overflow and correct. Must be done in atomic compare and exchange
-	do {
-		new = prev == JOB_ID_MAX ? -1 : prev + 1;
-	} while (!__atomic_compare_exchange_n(&pool->job_id_prev, &prev, new, 0,
-					      __ATOMIC_SEQ_CST,
-					      __ATOMIC_SEQ_CST));
+	__fbr_atomic_ruw(jid, &pool->job_id_prev, prev,
+			 prev == JOB_ID_MAX ? -1 : prev + 1);
 #endif
 	return __atomic_add_fetch(&pool->job_id_prev, 1, __ATOMIC_RELEASE);
 }
@@ -649,3 +649,5 @@ int __fiber_pthread_create_get_err(int error)
 		return error;
 	}
 }
+
+#undef assert
