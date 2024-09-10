@@ -15,8 +15,6 @@ extern void __fiber_die(const char *msg, int fd, int exit_code);
 extern int __fiber_mutex_init_get_err(int error);
 extern int __fiber_sem_init_get_err(int error);
 
-static int __fifo_length_semaphores(struct fifo_jq *fq, qsize *out);
-
 int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 			  void (*free)(void *))
 {
@@ -134,15 +132,9 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 void fiber_queue_fifo_free(void *queue)
 {
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
-	// Make sure nobody else is holding the lock
-	// We just kinda have to assume these won't fail.
-	// If they do, the state of this program was unrecoverable anyway
-	pthread_mutex_lock(&fq->lock);
-	pthread_mutex_unlock(&fq->lock);
-	pthread_mutex_destroy(&fq->lock);
-
 	fq->capacity = 0;
 	fq->free(fq->jobs);
+	pthread_mutex_destroy(&fq->lock);
 	sem_destroy(&fq->jobs_num);
 	sem_destroy(&fq->void_num);
 	fq->free(fq);
@@ -157,28 +149,11 @@ qsize fiber_queue_fifo_capacity(void *queue)
 qsize fiber_queue_fifo_length(void *queue)
 {
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
-	int lock_res = pthread_mutex_lock(&fq->lock);
-	if (lock_res != 0 && lock_res != EDEADLK) {
-		qsize from_semaphore;
-		if (__fifo_length_semaphores(fq, &from_semaphore) == 0) {
-			return from_semaphore;
-		}
-		return 0;
-	}
-	const qsize head = fq->tail;
-	const qsize tail = fq->head;
-	pthread_mutex_unlock(&fq->lock);
-	return (tail >= head) ? tail - head : fq->capacity - head + tail;
-}
-
-static int __fifo_length_semaphores(struct fifo_jq *fq, qsize *out)
-{
-	int sem_val = -1;
+	int sem_val;
 	int error_code = sem_getvalue(&fq->jobs_num, &sem_val);
 	if (error_code != 0 || sem_val < 0) {
-		return -1;
+		return 0;
 	}
-	*out = sem_val;
-	return 0;
+	return sem_val;
 }
 #endif // FIBER_NO_DEFAULT_QUEUE

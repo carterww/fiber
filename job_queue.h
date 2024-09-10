@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 typedef long jid; // Type to represent Job id
-typedef unsigned int qsize; // Type to represent a queue's size
+typedef int qsize; // Type to represent a queue's size
 #define JOB_ID_MAX LONG_MAX
 #define JOB_ID_MIN LONG_MIN
 #define QUEUE_SIZE_MAX UINT_MAX
