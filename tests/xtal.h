@@ -120,6 +120,13 @@ void run_tests()
 		exit(EXIT_FAILURE);                                          \
 	}
 
+#define ASSERT_EQUAL_PTR(expected, actual)                                 \
+	if (expected != actual) {                                          \
+		fprintf(stderr, "Assertion failed: expected %p, got %p\n", \
+			expected, actual);                                 \
+		exit(EXIT_FAILURE);                                        \
+	}
+
 #define ASSERT_EQUAL_STR(expected, actual)                                                                      \
 	for (int i = 0; expected[i]; i++) {                                                                     \
 		if (expected[i] != actual[i] || !actual[i]) {                                                   \
@@ -148,5 +155,9 @@ void run_tests()
 			"Assertion failed: Memory do not points to null\n"); \
 		exit(EXIT_FAILURE);                                          \
 	}
+
+#define FAIL(msg)             \
+	fprintf(stderr, msg); \
+	exit(EXIT_FAILURE);
 
 #endif

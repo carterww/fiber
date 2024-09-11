@@ -4,6 +4,9 @@
 #include "../../job_queue.h"
 #include "../../queue_impls/fifo_job_queue.h"
 #include "../xtal.h"
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 static void setup(qsize cap);
@@ -81,27 +84,27 @@ TEST(fifo_pop_empty_block)
 	struct fiber_job buf;
 	int f = fork();
 	if (f < 0) {
-		ASSERT_EQUAL_STR("FORK FAILED", "")
+		FAIL("Fork failed.");
 	} else if (f == 0) {
 		/* This is a little messy but we are testing two things:
                  * 1. fiber_queue_fifo_pop blocks when empty.
                  * 2. We can wake fiber_queue_fifo_pop up with a signal.
                  *    This is needed for handling events like removing threads.
                  */
-		struct sigaction sa;
+		struct sigaction sa = { 0 };
 		sigemptyset(&sa.sa_mask);
 		sa.sa_handler = sigphony;
 		sigaction(SIGUSR1, &sa, NULL);
 		int res = fiber_queue_fifo_pop(jq, &buf, FIBER_BLOCK);
-		ASSERT_EQUAL_INT(EINTR, res)
 		exit(res);
 	} else {
 		// Hacky but just wait long enough for child to call sem_wait
-		sleep(2);
 		// Tell it to wake up
+		sleep(1);
 		kill(f, SIGUSR1);
 		int child_stat = -1;
 		waitpid(f, &child_stat, 0);
+		ASSERT_EQUAL_INT(EINTR, WEXITSTATUS(child_stat));
 	}
 	teardown();
 }
