@@ -28,8 +28,6 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags);
 
 void fiber_queue_fifo_free(void *queue);
 
-qsize fiber_queue_fifo_capacity(void *queue);
-
 qsize fiber_queue_fifo_length(void *queue);
 
 #endif // _FIBER_FIFO_JOB_QUEUE_H

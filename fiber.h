@@ -62,6 +62,7 @@ struct fiber_pool_init_options {
  *  queue_length:   The length of the queue. This parameter will be passed
  *                  to the queue init function provided in queue_ops. Must be
  *                  > 0.
+ * @returns: 0 on success, an error code otherwise.
  * @error FBR_ENULL_ARGS -> pool or opts are NULL.
  * @error FBR_EINVLD_SIZE -> threads_number or queue_length are not > 0
  * @error FBR_EQUEOPS_NONE -> FIBER_NO_DEFAULT_QUEUE is defined and queue_ops
@@ -77,7 +78,6 @@ struct fiber_pool_init_options {
  * @error FBR_EQUE_NULL -> The queue pointer was null after calling initialize
  *                          on the queue.
  * @error ENOMEM -> malloc returned a NULL pointer.
- * @returns: 0 on success, an error code otherwise.
  */
 int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts);
 
@@ -87,11 +87,17 @@ int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts);
  * @param queue_flags -> Flags to pass to the queue push function. Every
  * queue implementation should implement FIBER_BLOCK and FIBER_NO_BLOCK.
  * A custom implementation may take other options.
+ * @returns: 0 on success, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool, job, or job_func were NULL.
  * @error FBR_EPUSH_JOB -> An invalid job_id. The queue push function
- * did not return 0. In the default implementation, this occurs when
- * FIBER_NO_BLOCK is used and the queue is full.
- * @returns: 0 on success, an error otherwise.
+ * returned a positive integer. This indicates an error, but we could
+ * not return it as is because it would look like a valid job id.
+ * @error -int -> The queue implementation returned some negative
+ * error code.
+ *   - In the default fiber_queue_fifo_push, this number is most likely
+ *     EAGAIN * -1. This indicates FIBER_NO_BLOCK was used and the queue
+ *     was full. Others are possible, but these represent pthread_mutex_lock
+ *     errors (which hopefully won't happen).
  */
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		   uint32_t queue_flags);
@@ -113,8 +119,9 @@ void fiber_wait(struct fiber_pool *pool);
 /* Get the number of jobs currently waiting to be executed in the job queue.
  * @param pool -> The pool which contains the job queue to check.
  * @returns -> The number of jobs waiting in the queue.
- * @error -1 -> Something is null. If using a custom queue implementation,
- * ensure the "length" function is implemented.
+ * @error FBR_ENULL_ARGS -> pool, pool->job_queue, or pool->queue_ops is NULL.
+ * @error FBR_EQUEOPS_NONE -> there is no "length" operation defined for the
+ * queue.
  */
 qsize fiber_jobs_pending(struct fiber_pool *pool);
 
@@ -129,10 +136,17 @@ qsize fiber_jobs_pending(struct fiber_pool *pool);
  * @param threads_num -> The number of threads to remove. If this number is
  * greater than the current number of threads, all threads in the pool will
  * be cancelled as well as any newly created threads until the quota is met.
- * @returns -> 0 on succes, an error otherwise.
+ * @returns -> 0 on success, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool is NULL.
  * @error FBR_EINVLD_SIZE -> threads_num is less than 1.
- * @error EAGAIN -> pthread_mutex_lock failed.
+ * @error FBR_EPOOL_UNINIT -> pool was not properly initialized. It is missing
+ * queue_ops or queue_ops->push.
+ * @error FBR_EPUSH_JOB -> There was an error attempting to push the wake job
+ * onto the queue. If this error occurs the queue implementation refused to
+ * push the job.
+ * @error -int -> fiber_push_job received a negative error code from the
+ * underlying queue push implementation. Hopefully these don't conflic
+ * with the error codes above :)
  */
 int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num);
 
@@ -147,17 +161,17 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num);
 
 /* Get the current number of threads currently running in the pool.
  * @param pool -> The pool to check.
- * @returns -> The number of threads the pool has allocated and working.
- * @error -> If pool is NULL, 0 is returned.
+ * @returns -> The number of threads the pool has allocated and working or
+ * a negative number representing an error.
+ * @error FBR_ENULL_ARGS -> pool is NULL.
  */
 tpsize fiber_threads_number(struct fiber_pool *pool);
 
 /* Get the current number of threads currently running a user job.
  * @param pool -> The pool to check.
- * @returns -> The number of working threads.
- * @error -> If pool is NULL, THREAD_POOL_SIZE_MAX is returned. This
- * value is returned instead of 0 to prevent a situation where the user
- * may think they can free because there are no working threads.
+ * @returns -> The number of working threads or a negative number
+ * representing an error.
+ * @error FBR_ENULL_ARGS -> pool is NULL.
  */
 tpsize fiber_threads_working(struct fiber_pool *pool);
 
@@ -168,13 +182,14 @@ tpsize fiber_threads_working(struct fiber_pool *pool);
 
 #define FBR_EPUSH_JOB -1
 #define FBR_EINVLD_JOB FBR_EPUSH_JOB
-#define FBR_EMTX_INIT 128
-#define FBR_ENULL_ARGS 129
-#define FBR_EINVLD_SIZE 130
-#define FBR_EQUE_NULL 131
-#define FBR_ENO_RSC 132
-#define FBR_EPTHRD_PERM 133
-#define FBR_ESEM_RNG 134
-#define FBR_EQUEOPS_NONE 135
+#define FBR_EMTX_INIT -2
+#define FBR_ENULL_ARGS -3
+#define FBR_EINVLD_SIZE -4
+#define FBR_EQUE_NULL -5
+#define FBR_ENO_RSC -6
+#define FBR_EPTHRD_PERM -7
+#define FBR_ESEM_RNG -8
+#define FBR_EQUEOPS_NONE -9
+#define FBR_EPOOL_UNINIT -10
 
 #endif // _FIBER_H

@@ -28,10 +28,6 @@ void fake_qfree(void *queue)
 {
 	return;
 }
-qsize fake_qcapactity(void *queue)
-{
-	return 0;
-}
 qsize fake_qlength(void *queue)
 {
 	return 0;
@@ -40,9 +36,7 @@ struct fiber_queue_operations default_queue_ops = { .push = fake_qpush,
 						    .pop = fake_qpop,
 						    .init = fake_qinit,
 						    .free = fake_qfree,
-						    .length = fake_qlength,
-						    .capactity =
-							    fake_qcapactity };
+						    .length = fake_qlength };
 
 #define ASSERT_EQUAL_JID(expected, actual) ASSERT_EQUAL_LONG(expected, actual)
 
@@ -102,7 +96,6 @@ TEST(optional_queue_operations_assigned)
 	struct fiber_queue_operations all_ops = default_queue_ops;
 	cstm.queue_ops = &all_ops;
 	int res = fiber_init(&pool, &cstm);
-	ASSERT_EQUAL_PTR(pool.queue_ops->capactity, all_ops.capactity);
 	ASSERT_EQUAL_PTR(pool.queue_ops->length, all_ops.length);
 	fiber_free(&pool);
 }

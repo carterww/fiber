@@ -26,7 +26,6 @@ struct fiber_queue_operations {
 	void (*free)(void *queue);
 
 	// Optional
-	qsize (*capactity)(void *queue);
 	qsize (*length)(void *queue);
 };
 

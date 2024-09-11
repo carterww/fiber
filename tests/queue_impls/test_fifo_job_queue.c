@@ -4,7 +4,6 @@
 #include "../../job_queue.h"
 #include "../../queue_impls/fifo_job_queue.h"
 #include "../xtal.h"
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -71,40 +70,42 @@ TEST(fifo_push_full)
 	sem_getvalue(&jq->void_num, &semval);
 	ASSERT_EQUAL_INT(0, semval)
 	int res = fiber_queue_fifo_push(jq, &j, FIBER_NO_BLOCK);
-	ASSERT_EQUAL_INT(EAGAIN, res)
+	ASSERT_EQUAL_INT(-EAGAIN, res)
 	teardown();
 }
 
-void sigphony(int signum)
+static void *__do_nothing_job(void *arg)
 {
+	return NULL;
 }
+
+static struct fiber_job wake_job = { .job_id = JOB_ID_MIN,
+				     .job_func = __do_nothing_job,
+				     .job_arg = NULL };
 TEST(fifo_pop_empty_block)
 {
 	setup(1);
 	struct fiber_job buf;
 	int f = fork();
+	/* This test is a little scufffed. It's goal is to ensure
+         * exit(8) is never called because fiber_queue_fifo_pop
+         * will block. alarm(1) will terminate the process after
+         * 1 second. This assumes sigalrm will term process with
+         * exit not equal to 8.
+         */
 	if (f < 0) {
 		FAIL("Fork failed.");
 	} else if (f == 0) {
-		/* This is a little messy but we are testing two things:
-                 * 1. fiber_queue_fifo_pop blocks when empty.
-                 * 2. We can wake fiber_queue_fifo_pop up with a signal.
-                 *    This is needed for handling events like removing threads.
-                 */
-		struct sigaction sa = { 0 };
-		sigemptyset(&sa.sa_mask);
-		sa.sa_handler = sigphony;
-		sigaction(SIGUSR1, &sa, NULL);
-		int res = fiber_queue_fifo_pop(jq, &buf, FIBER_BLOCK);
-		exit(res);
+		alarm(1);
+		fiber_queue_fifo_pop(jq, &buf, FIBER_BLOCK);
+		exit(8);
 	} else {
-		// Hacky but just wait long enough for child to call sem_wait
-		// Tell it to wake up
-		sleep(1);
-		kill(f, SIGUSR1);
 		int child_stat = -1;
 		waitpid(f, &child_stat, 0);
-		ASSERT_EQUAL_INT(EINTR, WEXITSTATUS(child_stat));
+		int exit_stat = WEXITSTATUS(child_stat);
+		if (exit_stat == 8) {
+			FAIL("Made it past fiber_queue_fifo_pop");
+		}
 	}
 	teardown();
 }

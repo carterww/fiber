@@ -39,7 +39,6 @@ static struct fiber_queue_operations def_queue_ops = {
 	.pop = fiber_queue_fifo_pop,
 	.init = fiber_queue_fifo_init,
 	.free = fiber_queue_fifo_free,
-	.capactity = fiber_queue_fifo_capacity,
 	.length = fiber_queue_fifo_length,
 };
 #else
@@ -52,9 +51,14 @@ struct pthread_arg {
 	struct fiber_thread *self;
 };
 
-static void sigusr1_handler(int signum)
+static void *__do_nothing_job(void *arg)
 {
+	return NULL;
 }
+
+static struct fiber_job wake_job = { .job_id = JOB_ID_MIN,
+				     .job_func = __do_nothing_job,
+				     .job_arg = NULL };
 
 // fifo_job_queue.c uses these
 void __fiber_die(const char *msg, int fd, int exit_code);
@@ -81,9 +85,9 @@ static int worker_threads_start(struct fiber_pool *pool,
 				tpsize threads_number);
 static int worker_pthread_start(struct pthread_arg *arg);
 static void *worker_loop(void *arg);
-static int worker_register_signal_handlers();
+static inline int handle_pool_flags(struct fiber_pool *pool);
+static int wake_worker_thread(struct fiber_pool *pool);
 static void handle_flag_wait_all(struct fiber_pool *pool);
-static void wake_next_sleeping_thread(struct fiber_pool *pool);
 static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number);
 static void thread_clean_self(struct fiber_pool *pool,
 			      struct fiber_thread *self);
@@ -173,7 +177,10 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 	assert(pool->queue_ops != NULL || pool->queue_ops->push != NULL,
 	       "queue_ops or push is null.");
 	int push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
-	if (push_res != 0) {
+	// Don't allow positive error codes to return
+	if (push_res < 0) {
+		return push_res;
+	} else if (push_res != 0) {
 		return FBR_EPUSH_JOB;
 	}
 	return job->job_id;
@@ -209,11 +216,10 @@ void fiber_wait(struct fiber_pool *pool)
 	// working is 0. The queue was either just empty or is empty.
 	tpsize working =
 		__atomic_load_n(&pool->threads_working, __ATOMIC_SEQ_CST);
-	if (working == 0) {
-		return;
+	if (working > 0) {
+		while (sem_wait(&pool->threads_sync) != 0 && errno == EINTR)
+			;
 	}
-	while (sem_wait(&pool->threads_sync) != 0 && errno == EINTR)
-		;
 	uint32_t off = ~FIBER_POOL_FLAG_WAIT;
 	__atomic_and_fetch(&pool->pool_flags, off, __ATOMIC_SEQ_CST);
 }
@@ -221,8 +227,11 @@ void fiber_wait(struct fiber_pool *pool)
 qsize fiber_jobs_pending(struct fiber_pool *pool)
 {
 	if (pool == NULL || pool->job_queue == NULL ||
-	    pool->queue_ops == NULL || pool->queue_ops->length == NULL) {
-		return -1;
+	    pool->queue_ops == NULL) {
+		return FBR_ENULL_ARGS;
+	}
+	if (pool->queue_ops->length == NULL) {
+		return FBR_EQUEOPS_NONE;
 	}
 	return pool->queue_ops->length(pool->job_queue);
 }
@@ -237,13 +246,15 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (threads_num < 1) {
 		return FBR_EINVLD_SIZE;
 	}
-	// Set flag to notify thread it should commit seppuku
+	if (pool->queue_ops == NULL || pool->queue_ops->push == NULL) {
+		return FBR_EPOOL_UNINIT;
+	}
+	// Set flag & val to notify thread it should commit seppuku
 	__atomic_add_fetch(&pool->threads_kill_number, threads_num,
 			   __ATOMIC_SEQ_CST);
 	__atomic_or_fetch(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
 			  __ATOMIC_SEQ_CST);
-	wake_next_sleeping_thread(pool);
-	return 0;
+	return wake_worker_thread(pool);
 }
 
 int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
@@ -280,7 +291,7 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 tpsize fiber_threads_number(struct fiber_pool *pool)
 {
 	if (pool == NULL) {
-		return 0;
+		return FBR_ENULL_ARGS;
 	}
 	return __atomic_load_n(&pool->threads_number, __ATOMIC_RELAXED);
 }
@@ -288,7 +299,7 @@ tpsize fiber_threads_number(struct fiber_pool *pool)
 tpsize fiber_threads_working(struct fiber_pool *pool)
 {
 	if (pool == NULL) {
-		return THREAD_POOL_SIZE_MAX;
+		return FBR_ENULL_ARGS;
 	}
 	return __atomic_load_n(&pool->threads_working, __ATOMIC_RELAXED);
 }
@@ -317,7 +328,6 @@ init_queue_ops(struct fiber_queue_operations *ops, void *(*malloc)(size_t))
 	a_ops->pop = ops->pop;
 	a_ops->init = ops->init;
 	a_ops->free = ops->free;
-	a_ops->capactity = ops->capactity;
 	a_ops->length = ops->length;
 	return a_ops;
 }
@@ -486,15 +496,12 @@ static void *worker_loop(void *arg)
 
 	pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, NULL);
 	pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, NULL);
-	worker_register_signal_handlers();
 
+	int last_handle_flags_res = 0;
 	while (1) {
 		__atomic_store_n(&self->job_id, -1, __ATOMIC_RELAXED);
 		int pop_res = job_pop(pool->job_queue, &job_buf, FIBER_BLOCK);
-		if (pop_res == EINTR) {
-			__atomic_store_n(&self->job_id, 0, __ATOMIC_RELAXED);
-			goto handle_flags;
-		} else if (pop_res != 0) {
+		if (pop_res != 0) {
 			sched_yield();
 			continue;
 		}
@@ -506,20 +513,35 @@ static void *worker_loop(void *arg)
 			job_buf.job_func(job_buf.job_arg);
 			// Should this be atomic load? I don't think it matters
 			if (pool->pool_flags & FIBER_POOL_FLAG_KILL_N) {
-				goto handle_flags;
+				break; // Break queue pop loop
 			}
 		} while (job_pop(pool->job_queue, &job_buf, 0) == 0);
 		__atomic_sub_fetch(&pool->threads_working, 1, __ATOMIC_RELAXED);
 
-handle_flags: {
+		if ((last_handle_flags_res = handle_pool_flags(pool)) != 0) {
+			break; // Break while(1) loop
+		}
+	} // End of while(1) loop
+	assert(last_handle_flags_res != 0,
+	       "A thread reached its cleanup without being told to by handle_pool_flags");
+	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
+	thread_clean_self(pool, self);
+	if (kit)
+		pool->free(kit);
+	pthread_exit(0);
+}
+
+static int handle_pool_flags(struct fiber_pool *pool)
+{
 	uint32_t pool_flags =
 		__atomic_load_n(&pool->pool_flags, __ATOMIC_SEQ_CST);
 	if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
 		tpsize to_kill = __atomic_fetch_sub(&pool->threads_kill_number,
 						    1, __ATOMIC_SEQ_CST);
 		if (to_kill > 0) {
-			wake_next_sleeping_thread(pool);
-			goto exit_thread;
+			int wake_res = wake_worker_thread(pool);
+			assert(wake_res == 0, "wake_worker_thread failed");
+			return 1; // Non zero value to indicate we should exit
 		} else {
 			uint32_t off = ~FIBER_POOL_FLAG_KILL_N;
 			__atomic_and_fetch(&pool->pool_flags, off,
@@ -529,26 +551,18 @@ handle_flags: {
 	if (pool_flags & FIBER_POOL_FLAG_WAIT) {
 		handle_flag_wait_all(pool);
 	}
-}
-	}
-
-exit_thread:
-	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
-	thread_clean_self(pool, self);
-	if (kit)
-		pool->free(kit);
-	pthread_exit(0);
-}
-
-static inline int worker_register_signal_handlers()
-{
-	struct sigaction sa = { 0 };
-	sigemptyset(&sa.sa_mask);
-	sa.sa_handler = sigusr1_handler;
-	if (sigaction(SIGUSR1, &sa, NULL) == -1) {
-		return errno;
-	}
 	return 0;
+}
+
+static int wake_worker_thread(struct fiber_pool *pool)
+{
+	assert(pool != NULL, "caller did not check pool for NULL");
+	// Put a job onto the queue whose sole purpose is to wake up
+	// a thread and allow it to handle the flags we just set.
+	int res = fiber_job_push(pool, &wake_job, FIBER_BLOCK);
+	assert(res != FBR_ENULL_ARGS,
+	       "we passed a null job or job_func. check wake_job global");
+	return res < 0 ? res : 0;
 }
 
 static void handle_flag_wait_all(struct fiber_pool *pool)
@@ -563,26 +577,6 @@ static void handle_flag_wait_all(struct fiber_pool *pool)
 			    STDERR_FILENO, 1);
 		return;
 	}
-}
-
-static void wake_next_sleeping_thread(struct fiber_pool *pool)
-{
-	int lock_res = pthread_mutex_lock(&pool->lock);
-	if (lock_res != 0) {
-		return;
-	}
-	struct fiber_thread *head = pool->thread_head;
-	while (head != NULL) {
-		jid curr_job_id =
-			__atomic_load_n(&head->job_id, __ATOMIC_SEQ_CST);
-		if (curr_job_id < 0) {
-			// Wake up thread to handle new flags
-			pthread_kill(head->thread_id, SIGUSR1);
-			break;
-		}
-		head = head->next;
-	}
-	pthread_mutex_unlock(&pool->lock);
 }
 
 static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number)
@@ -603,7 +597,6 @@ static inline void thread_clean_self(struct fiber_pool *pool,
 		__fiber_die(
 			"Could not obtain pool lock to remove thread from ll.",
 			STDERR_FILENO, 1);
-		return;
 	}
 	thread_ll_remove(&pool->thread_head, self);
 	pool->free(self);
@@ -626,10 +619,8 @@ static const char *invalid_error_msg = "__*_get_err cannot take 0\n";
 
 int __fiber_mutex_init_get_err(int error)
 {
+	assert(error != 0, invalid_error_msg);
 	switch (error) {
-	case 0:
-		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
-		return 0;
 	case EAGAIN: // System did not have resource to init mutx (excluding mem).
 		return FBR_ENO_RSC;
 	case EPERM: // Does not have permission to init mutex
@@ -644,10 +635,8 @@ int __fiber_mutex_init_get_err(int error)
 
 int __fiber_sem_init_get_err(int error)
 {
+	assert(error != 0, invalid_error_msg);
 	switch (error) {
-	case 0:
-		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
-		return 0;
 	case EINVAL: // Semaphore value too large
 		return FBR_ESEM_RNG;
 	case ENOSYS: // Don't use pshared, should not encounter.
@@ -658,10 +647,8 @@ int __fiber_sem_init_get_err(int error)
 
 int __fiber_pthread_create_get_err(int error)
 {
+	assert(error != 0, invalid_error_msg);
 	switch (error) {
-	case 0:
-		__fiber_die(invalid_error_msg, STDERR_FILENO, 1);
-		return 0;
 	case EAGAIN: // Insufficent resources to create another thread
 		return FBR_ENO_RSC;
 	case EPERM: // Permissions erro

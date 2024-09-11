@@ -77,12 +77,15 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	} else {
 		int try_res = sem_trywait(&fq->void_num);
 		if (try_res == -1) {
-			return EAGAIN;
+			return -EAGAIN;
 		}
 	}
 
 	int lock_res = pthread_mutex_lock(&fq->lock);
 	if (lock_res != 0 && lock_res != EDEADLK) {
+		if (lock_res > 0) {
+			lock_res = -lock_res;
+		}
 		return lock_res;
 	}
 	// Critical section
@@ -92,7 +95,6 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	lock_res = sem_post(&fq->jobs_num);
 	if (lock_res != 0) {
 		__fiber_die(sem_post_err_msg, STDERR_FILENO, errno);
-		return lock_res;
 	}
 	return 0;
 }
@@ -101,11 +103,8 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 {
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	if (flags & FIBER_BLOCK) {
-		while (sem_wait(&fq->jobs_num) == -1) {
-			if (errno == EINTR) {
-				return EINTR;
-			}
-		}
+		while (sem_wait(&fq->jobs_num) == -1 && errno == EINTR)
+			;
 	} else {
 		int try_res = sem_trywait(&fq->jobs_num);
 		if (try_res == -1) {
@@ -138,12 +137,6 @@ void fiber_queue_fifo_free(void *queue)
 	sem_destroy(&fq->jobs_num);
 	sem_destroy(&fq->void_num);
 	fq->free(fq);
-}
-
-qsize fiber_queue_fifo_capacity(void *queue)
-{
-	struct fifo_jq *fq = (struct fifo_jq *)queue;
-	return fq->capacity;
 }
 
 qsize fiber_queue_fifo_length(void *queue)
