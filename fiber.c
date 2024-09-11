@@ -146,10 +146,13 @@ int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts)
 	}
 	return 0;
 err:
-	if (mutex_res == 0)
-		pthread_mutex_destroy(&pool->lock);
-	if (queue_res == 0 && pool->job_queue != NULL)
+	if (mutex_res == 0) {
+		int des_res = pthread_mutex_destroy(&pool->lock);
+		assert(des_res == 0, "failed to destroy mutex");
+	}
+	if (queue_res == 0 && pool->job_queue != NULL) {
 		pool->queue_ops->free(pool->job_queue);
+	}
 	if (pool->queue_ops != NULL) {
 #ifndef FIBER_NO_DEFAULT_QUEUE
 		if (pool->queue_ops != &def_queue_ops)
@@ -185,7 +188,8 @@ void fiber_free(struct fiber_pool *pool)
 	}
 	pool->queue_ops->free(pool->job_queue);
 	fiber_thread_pool_free(pool);
-	pthread_mutex_destroy(&pool->lock);
+	int des_res = pthread_mutex_destroy(&pool->lock);
+	assert(des_res == 0, "failed to destroy mutex");
 #ifndef FIBER_NO_DEFAULT_QUEUE
 	if (pool->queue_ops != &def_queue_ops)
 #endif
@@ -347,18 +351,19 @@ static int fiber_thread_pool_init(struct fiber_pool *pool,
 err:
 	if (pool->thread_head)
 		thread_ll_free(pool->thread_head, pool->free);
-	if (sem_res == 0)
-		sem_destroy(&pool->threads_sync);
+	if (sem_res == 0) {
+		int des_res = sem_destroy(&pool->threads_sync);
+		assert(des_res == 0, "failed to destroy semaphore");
+	}
 	return error_code;
 }
 
 static void fiber_thread_pool_free(struct fiber_pool *pool)
 {
-	pthread_mutex_lock(&pool->lock);
 	pthread_cancel_n(pool->thread_head, THREAD_POOL_SIZE_MAX);
 	thread_ll_free(pool->thread_head, pool->free);
-	sem_destroy(&pool->threads_sync);
-	pthread_mutex_unlock(&pool->lock);
+	int des_res = sem_destroy(&pool->threads_sync);
+	assert(des_res == 0, "failed to destroy semaphore");
 }
 
 static int thread_ll_alloc_n(struct fiber_thread **head, tpsize threads_number,
@@ -584,7 +589,9 @@ static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number)
 {
 	tpsize i = 0;
 	while (head != NULL && i < threads_number) {
-		pthread_cancel(head[i++].thread_id);
+		int res = pthread_cancel(head[i++].thread_id);
+		assert(res == 0, "pthread_cancel returned an error");
+		head = head->next;
 	}
 }
 
