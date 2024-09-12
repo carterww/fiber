@@ -1,4 +1,4 @@
-#include "../fiber.c" // Testing static functions
+#include "fiber.c"
 #include "xtal.h"
 
 #define default_fiber_thread(j)                            \

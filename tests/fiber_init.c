@@ -1,4 +1,4 @@
-#include "../fiber.c"
+#include "fiber.c"
 #include "xtal.h"
 
 #define DEFAULT_THREADS_NUMBER 2

@@ -1,5 +1,6 @@
 CC = gcc
-CFLAGS = -I. -Iqueue_impls -O2 -g
+CFLAGS = -I. -Iqueue_impls -O2
+TESTFLAGS = -Itests -g
 
 OBJ = fiber.o queue_impls/fifo_job_queue.o
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
@@ -9,6 +10,7 @@ DEFS = -DFIBER_ASSERTS -DFIBER_CHECK_JID_OVERFLOW
 example: build_dir bin_dir example.o $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ_OUT) build/$(word 3,$^) -o bin/$@
 
+test_%: CFLAGS+=$(TESTFLAGS)
 test_all: test_fifo test_thread_ll test_fiber_init
 
 test_fifo: test_dirs tests/queue_impls/test_fifo_job_queue.o $(OBJ)

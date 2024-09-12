@@ -1,12 +1,12 @@
 #include <errno.h>
 #include <semaphore.h>
-
-#include "../../job_queue.h"
-#include "../../queue_impls/fifo_job_queue.h"
-#include "../xtal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+
+#include "job_queue.h"
+#include "queue_impls/fifo_job_queue.h"
+#include "xtal.h"
 
 static void setup(qsize cap);
 static void teardown();

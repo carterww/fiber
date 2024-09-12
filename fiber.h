@@ -1,7 +1,6 @@
 #ifndef _FIBER_H
 #define _FIBER_H
 
-#include <errno.h>
 #include <limits.h>
 #include <pthread.h>
 #include <semaphore.h>

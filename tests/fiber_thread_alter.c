@@ -1,4 +1,4 @@
-#include "../fiber.c"
+#include "fiber.c"
 #include "xtal.h"
 #include <time.h>
 #include <unistd.h>
