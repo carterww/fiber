@@ -10,7 +10,11 @@
 
 static void setup(qsize cap);
 static void teardown();
+
 static struct fifo_jq *jq = NULL;
+void *do_nothing(void *arg)
+{
+}
 
 static void push_phony_job(jid id)
 {
@@ -42,6 +46,7 @@ TEST(fifo_push_empty)
 	// Note: this call doesn't check if job is valid, fiber_push
 	// does that
 	struct fiber_job job = { 0 };
+	job.job_func = do_nothing;
 	int res = fiber_queue_fifo_push(jq, &job, FIBER_BLOCK);
 	ASSERT_EQUAL_INT(0, res)
 	ASSERT_EQUAL_INT(0, jq->head)
@@ -58,6 +63,7 @@ TEST(fifo_push_full)
 {
 	setup(2);
 	struct fiber_job j = { 0 };
+	j.job_func = do_nothing;
 	for (int i = 0; i < 2; i++) {
 		int res = fiber_queue_fifo_push(jq, &j, FIBER_NO_BLOCK);
 		ASSERT_EQUAL_INT(0, res)

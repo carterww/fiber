@@ -3,21 +3,24 @@
 #include <pthread.h>
 #include <semaphore.h>
 
+#include "fiber_utils.h"
 #include "fifo_job_queue.h"
 #include "../job_queue.h"
-#include <unistd.h>
 
 static const char *sem_post_err_msg =
 	"sem_post returned error. Likely an overflow\n";
 
 // From fiber.c
-extern void __fiber_die(const char *msg, int fd, int exit_code);
 extern int __fiber_mutex_init_get_err(int error);
 extern int __fiber_sem_init_get_err(int error);
 
 int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 			  void (*free)(void *))
 {
+	assert(queue != NULL, "fifo_init received a NULL queue");
+	assert(capacity > 0, "fifo_init received a bad capacity");
+	assert(malloc != NULL, "fifo_init received a NULL malloc func");
+	assert(free != NULL, "fifo_init received a NULL malloc func");
 	int error_code = 0;
 	struct fifo_jq *fq = malloc(sizeof(*fq));
 	if (fq == NULL) {
@@ -69,6 +72,9 @@ err:
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 {
+	assert(queue != NULL, "fifo_push given NULL queue");
+	assert(job != NULL, "fifo_push given NULL job");
+	assert(job->job_func != NULL, "fifo_push given NULL job_func");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	// Decrement semaphore
 	if (flags & FIBER_BLOCK) {
@@ -82,25 +88,20 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	}
 
 	int lock_res = pthread_mutex_lock(&fq->lock);
-	if (lock_res != 0 && lock_res != EDEADLK) {
-		if (lock_res > 0) {
-			lock_res = -lock_res;
-		}
-		return lock_res;
-	}
+	assert(lock_res == 0, "failed to get lock to fifo_push");
 	// Critical section
 	fq->jobs[fq->tail] = *job;
 	fq->tail = (fq->tail + 1) % fq->capacity;
 	pthread_mutex_unlock(&fq->lock);
 	lock_res = sem_post(&fq->jobs_num);
-	if (lock_res != 0) {
-		__fiber_die(sem_post_err_msg, STDERR_FILENO, errno);
-	}
+	assert(lock_res == 0, sem_post_err_msg);
 	return 0;
 }
 
 int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 {
+	assert(queue != NULL, "fifo_pop given NULL queue");
+	assert(buffer != NULL, "fifo_pop given NULL job buffer");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	if (flags & FIBER_BLOCK) {
 		while (sem_wait(&fq->jobs_num) == -1 && errno == EINTR)
@@ -113,23 +114,19 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 	}
 
 	int lock_res = pthread_mutex_lock(&fq->lock);
-	if (lock_res != 0 && lock_res != EDEADLK) {
-		return lock_res;
-	}
+	assert(lock_res == 0, "failed to get lock to fifo_push");
 	// Critical section
 	*buffer = fq->jobs[fq->head];
 	fq->head = (fq->head + 1) % fq->capacity;
 	pthread_mutex_unlock(&fq->lock);
 	lock_res = sem_post(&fq->void_num);
-	if (lock_res != 0) {
-		__fiber_die(sem_post_err_msg, STDERR_FILENO, errno);
-		return lock_res;
-	}
+	assert(lock_res == 0, sem_post_err_msg);
 	return 0;
 }
 
 void fiber_queue_fifo_free(void *queue)
 {
+	assert(queue != NULL, "fifo_free given NULL queue");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	fq->capacity = 0;
 	fq->free(fq->jobs);
@@ -141,6 +138,7 @@ void fiber_queue_fifo_free(void *queue)
 
 qsize fiber_queue_fifo_length(void *queue)
 {
+	assert(queue != NULL, "fifo_length given NULL queue");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	int sem_val;
 	int error_code = sem_getvalue(&fq->jobs_num, &sem_val);

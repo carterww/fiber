@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -I. -Iqueue_impls -O2
+CFLAGS = -I. -Iqueue_impls -O2 -g
 
 OBJ = fiber.o queue_impls/fifo_job_queue.o
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
@@ -16,6 +16,10 @@ test_fifo: test_dirs tests/queue_impls/test_fifo_job_queue.o $(OBJ)
 	bin/tests/$@
 
 test_fiber_init: test_dirs tests/fiber_init.o queue_impls/fifo_job_queue.o
+	$(CC) $(CFLAGS) $(DEFS) build/$(word 2,$^) build/$(word 3,$^) -o bin/tests/$@
+	bin/tests/$@
+
+test_thread_alter: test_dirs tests/fiber_thread_alter.o queue_impls/fifo_job_queue.o
 	$(CC) $(CFLAGS) $(DEFS) build/$(word 2,$^) build/$(word 3,$^) -o bin/tests/$@
 	bin/tests/$@
 

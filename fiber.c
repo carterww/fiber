@@ -1,26 +1,14 @@
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
-#include <signal.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "fiber.h"
+#include "fiber_utils.h"
 #include "job_queue.h"
-
-#ifdef FIBER_ASSERTS
-#include <stdio.h>
-#define assert(expr, err_msg)                                          \
-	if (!(expr)) {                                                 \
-		fprintf(stderr, "ERR: assert failed at %s:%d -> %s\n", \
-			__FILE__, __LINE__, err_msg);                  \
-		exit(1);                                               \
-	}
-#else
-#define assert(expr, err_msg)
-#endif
 
 // Atomic read, update, write that keeps retrying until it can atomically do all.
 #define __fbr_atomic_ruw(type, to_change_ptr, prev, new_expr)                  \
@@ -61,7 +49,6 @@ static struct fiber_job wake_job = { .job_id = JOB_ID_MIN,
 				     .job_arg = NULL };
 
 // fifo_job_queue.c uses these
-void __fiber_die(const char *msg, int fd, int exit_code);
 int __fiber_mutex_init_get_err(int error);
 int __fiber_sem_init_get_err(int error);
 int __fiber_pthread_create_get_err(int error);
@@ -69,6 +56,8 @@ int __fiber_pthread_create_get_err(int error);
 static struct fiber_queue_operations *
 init_queue_ops(struct fiber_queue_operations *ops, void *(*malloc)(size_t));
 static inline jid get_and_update_jid(jid *job_id_prev);
+static inline jid __fiber_job_push(struct fiber_pool *pool,
+				   struct fiber_job *job, uint32_t queue_flags);
 
 /* DECLARATIONS FOR THREAD HELPER FUNCTIONS */
 static int fiber_thread_pool_init(struct fiber_pool *pool,
@@ -170,20 +159,11 @@ err:
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		   uint32_t queue_flags)
 {
-	if (pool == NULL || job == NULL || job->job_func == NULL) {
+	if (unlikely(pool == NULL || job == NULL || job->job_func == NULL)) {
 		return FBR_ENULL_ARGS;
 	}
 	job->job_id = get_and_update_jid(&pool->job_id_prev);
-	assert(pool->queue_ops != NULL || pool->queue_ops->push != NULL,
-	       "queue_ops or push is null.");
-	int push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
-	// Don't allow positive error codes to return
-	if (push_res < 0) {
-		return push_res;
-	} else if (push_res != 0) {
-		return FBR_EPUSH_JOB;
-	}
-	return job->job_id;
+	return __fiber_job_push(pool, job, queue_flags);
 }
 
 void fiber_free(struct fiber_pool *pool)
@@ -271,18 +251,16 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 	if (error_code != 0) {
 		return error_code;
 	}
+	assert(threads != NULL, "failed to alloc threads in fiber_threads_add");
 	int start_res = worker_threads_start(pool, threads, threads_num);
+	int lock_res = pthread_mutex_lock(&pool->lock);
+	assert(lock_res == 0,
+	       "Could not obtain pool lock to add threads to ll.");
+	thread_ll_add(&pool->thread_head, threads);
+	pthread_mutex_unlock(&pool->lock);
 	if (start_res != 0) {
 		return start_res;
 	}
-	int lock_res = pthread_mutex_lock(&pool->lock);
-	if (lock_res != 0 && lock_res != EDEADLK) {
-		__fiber_die("Could not obtain pool lock to add threads to ll.",
-			    STDERR_FILENO, 1);
-		return -1;
-	}
-	thread_ll_add(&pool->thread_head, threads);
-	pthread_mutex_unlock(&pool->lock);
 	__atomic_add_fetch(&pool->threads_number, threads_num,
 			   __ATOMIC_RELAXED);
 	return 0;
@@ -302,6 +280,21 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 		return FBR_ENULL_ARGS;
 	}
 	return __atomic_load_n(&pool->threads_working, __ATOMIC_RELAXED);
+}
+
+static jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
+			    uint32_t queue_flags)
+{
+	assert(pool->queue_ops != NULL || pool->queue_ops->push != NULL,
+	       "queue_ops or push is null.");
+	int push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
+	// Don't allow positive error codes to return
+	if (push_res < 0) {
+		return push_res;
+	} else if (push_res != 0) {
+		return FBR_EPUSH_JOB;
+	}
+	return job->job_id;
 }
 
 /* STATIC FUNCTION DEFINITIONS */
@@ -442,22 +435,32 @@ static void thread_ll_remove(struct fiber_thread **head,
 	}
 }
 
+// In case of an error, we need to save previously allocated
+// args. This allows us to walk backward and free the args.
+struct pthread_arg_ll {
+	struct pthread_arg arg;
+	struct pthread_arg_ll *prev;
+};
 static int worker_threads_start(struct fiber_pool *pool,
 				struct fiber_thread *head,
 				tpsize threads_number)
 {
-	struct pthread_arg *args = pool->malloc(threads_number * sizeof(*args));
-	if (args == NULL) {
-		return errno;
-	}
 	int error_code = 0;
 	tpsize i = 0;
+	struct pthread_arg_ll *prev = NULL;
 	while (i < threads_number && head != NULL) {
-		struct pthread_arg *arg = &args[i];
-		arg->pool = pool;
-		arg->self = head;
-		arg->self->job_id = -1;
-		error_code = worker_pthread_start(arg);
+		struct pthread_arg_ll *arg_link =
+			pool->malloc(sizeof(*arg_link));
+		if (arg_link == NULL) {
+			error_code = ENOMEM;
+			goto err;
+		}
+		arg_link->prev = prev;
+		arg_link->arg.pool = pool;
+		arg_link->arg.self = head;
+		arg_link->arg.self->job_id = -1;
+		prev = arg_link;
+		error_code = worker_pthread_start(&arg_link->arg);
 		if (error_code != 0) {
 			goto err;
 		}
@@ -467,8 +470,14 @@ static int worker_threads_start(struct fiber_pool *pool,
 
 	return 0;
 err:
-	if (i > 0)
+	if (i > 0) {
 		pthread_cancel_n(head, i - 1);
+	}
+	while (prev != NULL) {
+		struct pthread_arg_ll *saved = prev->prev;
+		pool->free(prev);
+		prev = saved;
+	}
 	return error_code;
 }
 
@@ -559,7 +568,7 @@ static int wake_worker_thread(struct fiber_pool *pool)
 	assert(pool != NULL, "caller did not check pool for NULL");
 	// Put a job onto the queue whose sole purpose is to wake up
 	// a thread and allow it to handle the flags we just set.
-	int res = fiber_job_push(pool, &wake_job, FIBER_BLOCK);
+	int res = __fiber_job_push(pool, &wake_job, FIBER_BLOCK);
 	assert(res != FBR_ENULL_ARGS,
 	       "we passed a null job or job_func. check wake_job global");
 	return res < 0 ? res : 0;
@@ -572,20 +581,18 @@ static void handle_flag_wait_all(struct fiber_pool *pool)
 	if (tworking > 0) {
 		return;
 	}
-	if (sem_post(&pool->threads_sync) != 0) {
-		__fiber_die("sem_post error. probably overflow\n",
-			    STDERR_FILENO, 1);
-		return;
-	}
+	int res = sem_post(&pool->threads_sync);
+	assert(res == 0, "sem_post error. probably overflow");
 }
 
 static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number)
 {
 	tpsize i = 0;
 	while (head != NULL && i < threads_number) {
-		int res = pthread_cancel(head[i++].thread_id);
+		int res = pthread_cancel(head->thread_id);
 		assert(res == 0, "pthread_cancel returned an error");
 		head = head->next;
+		++i;
 	}
 }
 
@@ -593,11 +600,8 @@ static inline void thread_clean_self(struct fiber_pool *pool,
 				     struct fiber_thread *self)
 {
 	int lock_res = pthread_mutex_lock(&pool->lock);
-	if (lock_res != 0 && lock_res != EDEADLK) {
-		__fiber_die(
-			"Could not obtain pool lock to remove thread from ll.",
-			STDERR_FILENO, 1);
-	}
+	assert(lock_res == 0,
+	       "Could not obtain pool lock to remove thread from ll.");
 	thread_ll_remove(&pool->thread_head, self);
 	pool->free(self);
 	pthread_mutex_unlock(&pool->lock);
@@ -605,15 +609,6 @@ static inline void thread_clean_self(struct fiber_pool *pool,
 }
 
 /* INTERNAL MISC FUNCTIONS */
-
-void __fiber_die(const char *msg, int fd, int exit_code)
-{
-	if (fd < 1)
-		fd = STDERR_FILENO;
-	unsigned long len = strlen(msg);
-	write(fd, msg, len);
-	exit(exit_code);
-}
 
 static const char *invalid_error_msg = "__*_get_err cannot take 0\n";
 
@@ -658,5 +653,3 @@ int __fiber_pthread_create_get_err(int error)
 		return error;
 	}
 }
-
-#undef assert
