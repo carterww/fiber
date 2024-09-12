@@ -1,6 +1,7 @@
-#ifndef XTAL_H
-#define XTAL_H
+#ifndef _XTAL_H
+#define _XTAL_H
 
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -160,4 +161,4 @@ void run_tests()
 	fprintf(stderr, msg); \
 	exit(EXIT_FAILURE);
 
-#endif
+#endif // _XTAL_H

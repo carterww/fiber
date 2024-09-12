@@ -60,26 +60,30 @@ static inline jid __fiber_job_push(struct fiber_pool *pool,
 				   struct fiber_job *job, uint32_t queue_flags);
 
 /* DECLARATIONS FOR THREAD HELPER FUNCTIONS */
-static int fiber_thread_pool_init(struct fiber_pool *pool,
-				  tpsize threads_number);
-static void fiber_thread_pool_free(struct fiber_pool *pool);
-static int thread_ll_alloc_n(struct fiber_thread **head, tpsize threads_number,
-			     void *(*malloc)(size_t));
-static void thread_ll_free(struct fiber_thread *head, void (*free)(void *));
-static void thread_ll_add(struct fiber_thread **head, struct fiber_thread *new);
-static void thread_ll_remove(struct fiber_thread **head,
-			     struct fiber_thread *thread);
+static inline int fiber_thread_pool_init(struct fiber_pool *pool,
+					 tpsize threads_number);
+static inline void fiber_thread_pool_free(struct fiber_pool *pool);
+static inline int thread_ll_alloc_n(struct fiber_thread **head,
+				    tpsize threads_number,
+				    void *(*malloc)(size_t));
+static inline void thread_ll_free(struct fiber_thread *head,
+				  void (*free)(void *));
+static inline void thread_ll_add(struct fiber_thread **head,
+				 struct fiber_thread *new);
+static inline void thread_ll_remove(struct fiber_thread **head,
+				    struct fiber_thread *thread);
 static int worker_threads_start(struct fiber_pool *pool,
 				struct fiber_thread *head,
 				tpsize threads_number);
-static int worker_pthread_start(struct pthread_arg *arg);
+static inline int worker_pthread_start(struct pthread_arg *arg);
 static void *worker_loop(void *arg);
 static inline int handle_pool_flags(struct fiber_pool *pool);
 static int wake_worker_thread(struct fiber_pool *pool);
-static void handle_flag_wait_all(struct fiber_pool *pool);
-static void pthread_cancel_n(struct fiber_thread *head, tpsize threads_number);
-static void thread_clean_self(struct fiber_pool *pool,
-			      struct fiber_thread *self);
+static inline void handle_flag_wait_all(struct fiber_pool *pool);
+static inline void pthread_cancel_n(struct fiber_thread *head,
+				    tpsize threads_number);
+static inline void thread_clean_self(struct fiber_pool *pool,
+				     struct fiber_thread *self);
 
 int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts)
 {
@@ -163,6 +167,7 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		return FBR_ENULL_ARGS;
 	}
 	job->job_id = get_and_update_jid(&pool->job_id_prev);
+	assert(job->job_id > -1, "given a negative job id");
 	return __fiber_job_push(pool, job, queue_flags);
 }
 
@@ -352,8 +357,9 @@ static int fiber_thread_pool_init(struct fiber_pool *pool,
 	}
 	return 0;
 err:
-	if (pool->thread_head)
+	if (pool->thread_head) {
 		thread_ll_free(pool->thread_head, pool->free);
+	}
 	if (sem_res == 0) {
 		int des_res = sem_destroy(&pool->threads_sync);
 		assert(des_res == 0, "failed to destroy semaphore");

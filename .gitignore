@@ -1,5 +1,8 @@
 .cache/
 build/
 bin/
+lib/
 compile_commands.json
 *.o
+*.a
+*.so

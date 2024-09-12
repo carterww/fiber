@@ -8,6 +8,19 @@
 
 #include "job_queue.h"
 
+/* List of definitions to change compilation
+ * 1. FIBER_ASSERTS: If defined, compile assert statements. These
+ *    will exit the program if the assertion is not true.
+ * 2. FIBER_CHECK_JID_OVERFLOW: If defined (or jid's max is less than
+ *    int64's max), Fiber will not allow job ids to overflow. A negative
+ *    job id represents an invalid job, so your program will experience
+ *    failure if the job_id incrementer overflows.
+ * 3. FIBER_NO_DEFAULT_QUEUE: If defined, Fiber will not compile the
+ *    default queue implementation. If this is defined, Fiber assumes
+ *    you will provide your own queue implementation at runtime through
+ *    fiber_pool_init_options.
+ */
+
 typedef int tpsize; // Type to represent number of threads in pool
 #define THREAD_POOL_SIZE_MAX INT_MAX
 

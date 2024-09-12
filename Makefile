@@ -1,31 +1,41 @@
 CC = gcc
-CFLAGS = -I. -Iqueue_impls -O2
+TARGET = fiber
+FASTFLAGS = -march=native -mtune=native
 TESTFLAGS = -Itests -g
+CFLAGS = $(FASTFLAGS) -I. -Iqueue_impls -O2 -std=c11
 
 OBJ = fiber.o queue_impls/fifo_job_queue.o
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
 
-DEFS = -DFIBER_ASSERTS -DFIBER_CHECK_JID_OVERFLOW
+DEFS = -DFIBER_ASSERTS
 
-example: build_dir bin_dir example.o $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ_OUT) build/$(word 3,$^) -o bin/$@
+all: lib
 
-test_%: CFLAGS+=$(TESTFLAGS)
-test_all: test_fifo test_thread_ll test_fiber_init
+lib: build_dir lib_dir $(OBJ)
+	ar rcs lib/lib$(TARGET).a $(OBJ_OUT)
 
-test_fifo: test_dirs tests/queue_impls/test_fifo_job_queue.o $(OBJ)
+lib_so: CFLAGS+=-fpic
+lib_so: build_dir lib_dir $(OBJ)
+	$(CC) -shared -o lib/lib$(TARGET).so $(OBJ_OUT)
+
+example: build_dir bin_dir example.o lib
+	$(CC) $(CFLAGS) -Llib build/$(word 3,$^) -o bin/$@ -l:lib$(TARGET).a
+
+testall: test_fifo test_thread_ll test_thread_alter test_fiber_init
+
+test_fifo: dirs_test tests/queue_impls/test_fifo_job_queue.o $(OBJ)
 	$(CC) $(CFLAGS) $(OBJ_OUT) build/$(word 2,$^) -o bin/tests/$@
 	bin/tests/$@
 
-test_fiber_init: test_dirs tests/fiber_init.o queue_impls/fifo_job_queue.o
+test_fiber_init: dirs_test tests/fiber_init.o queue_impls/fifo_job_queue.o
 	$(CC) $(CFLAGS) $(DEFS) build/$(word 2,$^) build/$(word 3,$^) -o bin/tests/$@
 	bin/tests/$@
 
-test_thread_alter: test_dirs tests/fiber_thread_alter.o queue_impls/fifo_job_queue.o
+test_thread_alter: dirs_test tests/fiber_thread_alter.o queue_impls/fifo_job_queue.o
 	$(CC) $(CFLAGS) $(DEFS) build/$(word 2,$^) build/$(word 3,$^) -o bin/tests/$@
 	bin/tests/$@
 
-test_thread_ll: test_dirs tests/fiber_thread_ll.o queue_impls/fifo_job_queue.o
+test_thread_ll: dirs_test tests/fiber_thread_ll.o queue_impls/fifo_job_queue.o
 	$(CC) $(CFLAGS) $(DEFS) build/$(word 2,$^) build/$(word 3,$^) -o bin/tests/$@
 	bin/tests/$@
 
@@ -35,18 +45,22 @@ test_thread_ll: test_dirs tests/fiber_thread_ll.o queue_impls/fifo_job_queue.o
 build_dir:
 	@mkdir -p build/queue_impls
 
-build_test_dir: build_dir
+build_dir_test: build_dir
 	@mkdir -p build/tests/queue_impls
 
 bin_dir:
 	@mkdir -p bin
 
-test_bin_dir: bin_dir
+lib_dir:
+	@mkdir -p lib
+
+bin_dir_test: bin_dir
 	@mkdir -p bin/tests
 
-test_dirs: build_test_dir test_bin_dir
+dirs_test: build_dir_test bin_dir_test
 
 clean:
-	rm -rf build/* bin/*
+	rm -rf build/* bin/* lib/*
 
-.PHONY: example build_dir bin_dir test_dirs clean
+test_%: CFLAGS+=$(TESTFLAGS)
+.PHONY: example build_dir bin_dir dirs_test clean so lib lib_dir
