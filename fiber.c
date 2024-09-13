@@ -541,8 +541,9 @@ static void *worker_loop(void *arg)
 	       "A thread reached its cleanup without being told to by handle_pool_flags");
 	pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL);
 	thread_clean_self(pool, self);
-	if (kit)
+	if (kit) {
 		pool->free(kit);
+	}
 	pthread_exit(0);
 }
 
@@ -551,7 +552,7 @@ static int handle_pool_flags(struct fiber_pool *pool)
 	uint32_t pool_flags =
 		__atomic_load_n(&pool->pool_flags, __ATOMIC_SEQ_CST);
 	if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
-		tpsize to_kill = __atomic_fetch_sub(&pool->threads_kill_number,
+		tpsize to_kill = __atomic_sub_fetch(&pool->threads_kill_number,
 						    1, __ATOMIC_SEQ_CST);
 		if (to_kill > 0) {
 			int wake_res = wake_worker_thread(pool);
@@ -561,6 +562,7 @@ static int handle_pool_flags(struct fiber_pool *pool)
 			uint32_t off = ~FIBER_POOL_FLAG_KILL_N;
 			__atomic_and_fetch(&pool->pool_flags, off,
 					   __ATOMIC_SEQ_CST);
+			return 1;
 		}
 	}
 	if (pool_flags & FIBER_POOL_FLAG_WAIT) {

@@ -57,8 +57,6 @@ int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 
 	return 0;
 err:
-	if (fq != NULL)
-		free(fq);
 	if (jobs != NULL)
 		free(jobs);
 	if (mutex_res == 0)
@@ -67,6 +65,8 @@ err:
 		sem_destroy(&fq->void_num);
 	if (sem_jobs_res == 0)
 		sem_destroy(&fq->jobs_num);
+	if (fq != NULL)
+		free(fq);
 	return error_code;
 }
 
@@ -128,7 +128,6 @@ void fiber_queue_fifo_free(void *queue)
 {
 	assert(queue != NULL, "fifo_free given NULL queue");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
-	fq->capacity = 0;
 	fq->free(fq->jobs);
 	pthread_mutex_destroy(&fq->lock);
 	sem_destroy(&fq->jobs_num);

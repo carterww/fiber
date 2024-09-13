@@ -79,6 +79,7 @@ TEST(threads_remove_idle)
 	if (poll_tries <= 0) {
 		FAIL("Idle threads were never killed");
 	}
+	ASSERT_EQUAL_INT(0, pool.pool_flags);
 	teardown();
 }
 
@@ -109,6 +110,7 @@ TEST(threads_remove_working)
 	if (poll_tries <= 0) {
 		FAIL("Idle threads were never killed");
 	}
+	ASSERT_EQUAL_INT(0, pool.pool_flags);
 	teardown();
 }
 

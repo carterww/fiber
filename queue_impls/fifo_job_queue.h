@@ -4,9 +4,8 @@
 
 #include <pthread.h>
 #include <semaphore.h>
-#include <stddef.h>
 
-#include "../job_queue.h"
+#include "job_queue.h"
 
 struct fifo_jq {
 	sem_t void_num;
