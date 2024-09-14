@@ -1,3 +1,5 @@
+/* See LICENSE file for copyright and license details. */
+
 #ifndef _FIBER_JOB_QUEUE_H
 #define _FIBER_JOB_QUEUE_H
 

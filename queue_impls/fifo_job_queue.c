@@ -1,3 +1,5 @@
+/* See LICENSE file for copyright and license details. */
+
 #ifndef FIBER_NO_DEFAULT_QUEUE
 #include <errno.h>
 #include <pthread.h>

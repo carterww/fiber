@@ -1,3 +1,5 @@
+/* See LICENSE file for copyright and license details. */
+
 #ifndef _FIBER_H
 #define _FIBER_H
 
@@ -108,8 +110,7 @@ int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts);
  * error code.
  *   - In the default fiber_queue_fifo_push, this number is most likely
  *     EAGAIN * -1. This indicates FIBER_NO_BLOCK was used and the queue
- *     was full. Others are possible, but these represent pthread_mutex_lock
- *     errors (which hopefully won't happen).
+ *     was full.
  */
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		   uint32_t queue_flags);
