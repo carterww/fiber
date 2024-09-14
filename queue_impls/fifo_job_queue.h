@@ -18,7 +18,7 @@ struct fifo_jq {
 	void (*free)(void *);
 };
 
-int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
+int fiber_queue_fifo_init(void **queue, qsize pages, void *(*malloc)(size_t),
 			  void (*free)(void *));
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
