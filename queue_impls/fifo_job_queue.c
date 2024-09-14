@@ -32,11 +32,6 @@ int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 		error_code = ENOMEM;
 		goto err;
 	}
-	int mutex_res = pthread_mutex_init(&fq->lock, NULL);
-	if (mutex_res != 0) {
-		error_code = __fiber_mutex_init_get_err(mutex_res);
-		goto err;
-	}
 	int sem_void_res = sem_init(&fq->void_num, 0, capacity);
 	if (sem_void_res != 0) {
 		error_code = __fiber_sem_init_get_err(errno);
@@ -59,8 +54,6 @@ int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 err:
 	if (jobs != NULL)
 		free(jobs);
-	if (mutex_res == 0)
-		pthread_mutex_destroy(&fq->lock);
 	if (sem_void_res == 0)
 		sem_destroy(&fq->void_num);
 	if (sem_jobs_res == 0)
@@ -87,13 +80,9 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 		}
 	}
 
-	int lock_res = pthread_mutex_lock(&fq->lock);
-	assert(lock_res == 0, "failed to get lock to fifo_push");
-	// Critical section
 	fq->jobs[fq->tail] = *job;
 	fq->tail = (fq->tail + 1) % fq->capacity;
-	pthread_mutex_unlock(&fq->lock);
-	lock_res = sem_post(&fq->jobs_num);
+	int lock_res = sem_post(&fq->jobs_num);
 	assert(lock_res == 0, sem_post_err_msg);
 	return 0;
 }
@@ -113,13 +102,9 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 		}
 	}
 
-	int lock_res = pthread_mutex_lock(&fq->lock);
-	assert(lock_res == 0, "failed to get lock to fifo_push");
-	// Critical section
 	*buffer = fq->jobs[fq->head];
 	fq->head = (fq->head + 1) % fq->capacity;
-	pthread_mutex_unlock(&fq->lock);
-	lock_res = sem_post(&fq->void_num);
+	int lock_res = sem_post(&fq->void_num);
 	assert(lock_res == 0, sem_post_err_msg);
 	return 0;
 }
@@ -129,7 +114,6 @@ void fiber_queue_fifo_free(void *queue)
 	assert(queue != NULL, "fifo_free given NULL queue");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	fq->free(fq->jobs);
-	pthread_mutex_destroy(&fq->lock);
 	sem_destroy(&fq->jobs_num);
 	sem_destroy(&fq->void_num);
 	fq->free(fq);

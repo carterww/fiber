@@ -10,10 +10,9 @@
 struct fifo_jq {
 	sem_t void_num;
 	sem_t jobs_num;
-	pthread_mutex_t lock;
-	struct fiber_job *jobs;
 	qsize head;
 	qsize tail;
+	struct fiber_job *jobs;
 	qsize capacity;
 	void (*free)(void *);
 };

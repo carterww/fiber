@@ -201,7 +201,8 @@ void fiber_wait(struct fiber_pool *pool)
 	// working is 0. The queue was either just empty or is empty.
 	tpsize working =
 		__atomic_load_n(&pool->threads_working, __ATOMIC_SEQ_CST);
-	if (working > 0) {
+	tpsize length = fiber_jobs_pending(pool);
+	if (working > 0 || length > 0) {
 		while (sem_wait(&pool->threads_sync) != 0 && errno == EINTR)
 			;
 	}

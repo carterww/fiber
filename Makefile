@@ -1,8 +1,7 @@
 CC = gcc
 TARGET = fiber
-FASTFLAGS = -march=native -mtune=native
 TESTFLAGS = -Itests -g
-CFLAGS = $(FASTFLAGS) -I. -Iqueue_impls -O2 -std=c11
+CFLAGS = -I. -Iqueue_impls -O2 -std=c11
 
 OBJ = fiber.o queue_impls/fifo_job_queue.o
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
@@ -19,7 +18,7 @@ lib_so: build_dir lib_dir $(OBJ)
 	$(CC) -shared -o lib/lib$(TARGET).so $(OBJ_OUT)
 
 example: build_dir bin_dir example.o lib
-	$(CC) $(CFLAGS) -Llib build/$(word 3,$^) -o bin/$@ -l:lib$(TARGET).a
+	$(CC) $(CFLAGS) -g -pg -Llib build/$(word 3,$^) -o bin/$@ -l:lib$(TARGET).a
 
 testall: test_fifo test_thread_ll test_thread_alter test_fiber_init
 
