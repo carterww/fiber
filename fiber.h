@@ -1,62 +1,83 @@
 /* See LICENSE file for copyright and license details. */
 
-#ifndef _FIBER_H
-#define _FIBER_H
+#ifndef FIBER_H
+#define FIBER_H
 
 #include <limits.h>
-#include <pthread.h>
-#include <semaphore.h>
+#include <stddef.h>
 #include <stdint.h>
 
-#include "job_queue.h"
+/** --- CONFIG --- **/
 
-/* List of definitions to change compilation
- * 1. FIBER_ASSERTS: If defined, compile assert statements. These
- *    will exit the program if the assertion is not true.
- * 2. FIBER_CHECK_JID_OVERFLOW: If defined (or jid's max is less than
- *    int64's max), Fiber will not allow job ids to overflow. A negative
- *    job id represents an invalid job, so your program will experience
- *    failure if the job_id incrementer overflows.
- * 3. FIBER_NO_DEFAULT_QUEUE: If defined, Fiber will not compile the
- *    default queue implementation. If this is defined, Fiber assumes
- *    you will provide your own queue implementation at runtime through
- *    fiber_pool_init_options.
- */
+/** Type Definitions **/
 
-typedef int tpsize; // Type to represent number of threads in pool
-#define THREAD_POOL_SIZE_MAX INT_MAX
+// These must be signed
+typedef int tpsize; // Threads in pool
+typedef int qsize; // Queue size
+typedef long jid; // Fiber job ID
+#define FIBER_TPSIZE_MAX (INT_MAX)
+#define FIBER_QSIZE_MAX (INT_MAX)
+#define FIBER_JID_MAX (LONG_MAX)
+#define FIBER_JID_MIN (LONG_MIN)
 
-/** Thread Management **/
+/** Debugging Options **/
 
-struct fiber_thread {
-	struct fiber_thread *next;
-	pthread_t thread_id;
+// If 0, runtime assertions will not be compiled.
+#define FIBER_ASSERTS 1
+
+/** Core Options **/
+
+// If 0, fiber will not check if job ids overflow. This can be problematic if
+// the type jid is < 64 bits because a negative job id is invalid.
+#define FIBER_CHECK_JID_OVERFLOW 1
+// Define overflow check if the max JID is < 64 bits. This is a safety thing.
+// Override at your own risk...
+#if FIBER_JID_MAX < INT64_MAX && FIBER_CHECK_JID_OVERFLOW == 0
+#undef FIBER_CHECK_JID_OVERFLOW
+#define FIBER_CHECK_JID_OVERFLOW 1
+#endif
+
+/** --- END CONFIG --- **/
+
+// Opaque structs. The definitions are in src/fiber_internal.h
+struct fiber_pool;
+
+struct fiber_job {
 	jid job_id;
+	void *(*job_func)(void *arg);
+	void *job_arg;
 };
 
-/** Pool **/
+struct fiber_queue_init_result {
+	int error;
+	void *queue;
+};
 
-struct fiber_pool {
-	pthread_mutex_t lock;
-	jid job_id_prev;
-	const struct fiber_queue_operations *queue_ops;
-	void *job_queue;
-	struct fiber_thread *thread_head;
-	tpsize threads_number;
-	tpsize threads_working;
-	sem_t threads_sync;
-	tpsize threads_kill_number;
-	uint32_t pool_flags;
-	void *(*malloc)(size_t __size);
-	void (*free)(void *__ptr);
+struct fiber_queue_operations {
+	// These four functions are required
+	int (*push)(void *queue, struct fiber_job *job, uint32_t flags);
+	int (*pop)(void *queue, struct fiber_job *buffer, uint32_t flags);
+	struct fiber_queue_init_result (*init)(qsize capacity,
+					       void *(*malloc)(size_t),
+					       void (*free)(void *));
+	void (*free)(void *queue);
+
+	// Optional
+	qsize (*length)(void *queue);
 };
 
 struct fiber_pool_init_options {
 	struct fiber_queue_operations *queue_ops;
-	void *(*malloc)(size_t __size);
-	void (*free)(void *__ptr);
+	void *(*malloc)(size_t size);
+	void (*free)(void *ptr);
 	tpsize threads_number;
 	qsize queue_length;
+};
+
+// Result of fiber_init. pool is a valid pointer iff error = 0.
+struct fiber_init_result {
+	int error;
+	struct fiber_pool *pool;
 };
 
 /* Responsible for initializing all resources needed for the thread pool and
@@ -76,12 +97,13 @@ struct fiber_pool_init_options {
  *  queue_length:   The length of the queue. This parameter will be passed
  *                  to the queue init function provided in queue_ops. Must be
  *                  > 0.
- * @returns: 0 on success, an error code otherwise.
+ * @returns: A struct that contains a possible error code and a pointer to a fiber_pool struct.
+ * If error = 0, pool is a valid pointer. Otherwise the operation failed and pool was not
+ * allocated.
  * @error FBR_ENULL_ARGS -> pool or opts are NULL.
  * @error FBR_EINVLD_SIZE -> threads_number or queue_length are not > 0
- * @error FBR_EQUEOPS_NONE -> FIBER_NO_DEFAULT_QUEUE is defined and queue_ops
- *                             is NULL or the required queue_ops provided are
- *                             not all provided.
+ * @error FBR_EQUEOPS_NONE ->  queue_ops is NULL or some required queue operations are
+ *                             missing.
  * @error FBR_ENO_RSC -> pthread or pthread_mutex could not be initialized due
  *                        to insufficient system resources (other than memory).
  * @error FBR_EPTHRD_PERM -> pthread or pthread_mutex could not be initialized
@@ -93,7 +115,7 @@ struct fiber_pool_init_options {
  *                          on the queue.
  * @error ENOMEM -> malloc returned a NULL pointer.
  */
-int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts);
+struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts);
 
 /* Pushes a job onto the job queue.
  * @param pool -> The thread pool to queue work.
@@ -188,10 +210,7 @@ tpsize fiber_threads_number(struct fiber_pool *pool);
  */
 tpsize fiber_threads_working(struct fiber_pool *pool);
 
-#define FIBER_POOL_FLAG_WAIT (1 << 0)
-#define FIBER_POOL_FLAG_KILL_N (1 << 1)
-
-/* ERROR CODES */
+/** ERROR CODES **/
 
 #define FBR_EPUSH_JOB -1
 #define FBR_EINVLD_JOB FBR_EPUSH_JOB
@@ -205,4 +224,10 @@ tpsize fiber_threads_working(struct fiber_pool *pool);
 #define FBR_EQUEOPS_NONE -9
 #define FBR_EPOOL_UNINIT -10
 
-#endif // _FIBER_H
+/** Flags **/
+
+// Job Queue Flags
+#define FIBER_QUEUE_BLOCK (1 << 31)
+#define FIBER_QUEUE_NO_BLOCK 0
+
+#endif // FIBER_H

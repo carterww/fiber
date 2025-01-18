@@ -4,9 +4,7 @@ bin/
 lib/
 compile_commands.json
 gmon.out
-perf.list
-perf.data
-perf.data.old
+perf.*
 *.o
 *.a
 *.so

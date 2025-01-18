@@ -1,5 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
+#include "fiber.h"
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
@@ -8,33 +9,8 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "fiber.h"
-#include "fiber_utils.h"
-#include "job_queue.h"
-
-// Atomic read, update, write that keeps retrying until it can atomically do all.
-#define __fbr_atomic_ruw(type, to_change_ptr, prev, new_expr)                  \
-	type new##type;                                                        \
-	do {                                                                   \
-		new##type = new_expr;                                          \
-	} while (!__atomic_compare_exchange_n(to_change_ptr, &prev, new##type, \
-					      0, __ATOMIC_SEQ_CST,             \
-					      __ATOMIC_SEQ_CST));
-
-#ifndef FIBER_NO_DEFAULT_QUEUE
-#include "queue_impls/fifo_job_queue.h"
-/* Default queue operations. Used if queue_ops are NULL in init */
-static struct fiber_queue_operations def_queue_ops = {
-	.push = fiber_queue_fifo_push,
-	.pop = fiber_queue_fifo_pop,
-	.init = fiber_queue_fifo_init,
-	.free = fiber_queue_fifo_free,
-	.length = fiber_queue_fifo_length,
-};
-#else
-#warning \
-	"No default queue implementation is being compiled. You MUST provide your own!"
-#endif
+#include "fiber_internal.h"
+#include "utils.h"
 
 struct pthread_arg {
 	struct fiber_pool *pool;
@@ -46,7 +22,7 @@ static void *__do_nothing_job(void *arg)
 	return NULL;
 }
 
-static struct fiber_job wake_job = { .job_id = JOB_ID_MIN,
+static struct fiber_job wake_job = { .job_id = FIBER_JID_MIN,
 				     .job_func = __do_nothing_job,
 				     .job_arg = NULL };
 
@@ -87,79 +63,92 @@ static inline void pthread_cancel_n(struct fiber_thread *head,
 static inline void thread_clean_self(struct fiber_pool *pool,
 				     struct fiber_thread *self);
 
-int fiber_init(struct fiber_pool *pool, struct fiber_pool_init_options *opts)
+struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts)
 {
-	if (pool == NULL || opts == NULL) {
-		return FBR_ENULL_ARGS;
+	struct fiber_init_result res = {
+		.error = 0,
+		.pool = NULL,
+	};
+	if (opts == NULL) {
+		res.error = FBR_ENULL_ARGS;
+		return res;
 	}
 	if (opts->threads_number < 1 || opts->queue_length < 1) {
-		return FBR_EINVLD_SIZE;
+		res.error = FBR_EINVLD_SIZE;
+		return res;
 	}
-	pool->malloc = opts->malloc == NULL ? malloc : opts->malloc;
-	pool->free = opts->free == NULL ? free : opts->free;
 	if (opts->queue_ops == NULL) {
-#ifndef FIBER_NO_DEFAULT_QUEUE
-		pool->queue_ops = &def_queue_ops;
-#else
-		return FBR_EQUEOPS_NONE;
-#endif
-	} else {
-		if (opts->queue_ops->push == NULL ||
-		    opts->queue_ops->pop == NULL ||
-		    opts->queue_ops->init == NULL ||
-		    opts->queue_ops->free == NULL) {
-			return FBR_EQUEOPS_NONE;
-		} else {
-			pool->queue_ops =
-				init_queue_ops(opts->queue_ops, pool->malloc);
+		res.error = FBR_EQUEOPS_NONE;
+		return res;
+	}
+	if (opts->queue_ops->push == NULL || opts->queue_ops->pop == NULL ||
+	    opts->queue_ops->init == NULL || opts->queue_ops->free == NULL) {
+		res.error = FBR_EQUEOPS_NONE;
+		return res;
+	}
+
+	struct fiber_pool *pool = NULL;
+	{
+		// Reduce scope of these temp variables so we only use functions
+		// from the pool later on
+		void *(*_malloc)(size_t) = opts->malloc == NULL ? malloc :
+								  opts->malloc;
+		void (*_free)(void *) = opts->free == NULL ? free : opts->free;
+		pool = _malloc(sizeof(*pool));
+		if (pool == NULL) {
+			res.error = ENOMEM;
+			return res;
 		}
+		pool->malloc = _malloc;
+		pool->free = _free;
 	}
+
+	pool->queue_ops = init_queue_ops(opts->queue_ops, pool->malloc);
 	if (pool->queue_ops == NULL) {
-		return FBR_EQUEOPS_NONE;
+		res.error = FBR_EQUEOPS_NONE;
+		return res;
 	}
-	int error_code = 0;
 	int mutex_res = pthread_mutex_init(&pool->lock, NULL);
 	if (mutex_res != 0) {
-		error_code = __fiber_mutex_init_get_err(mutex_res);
+		res.error = __fiber_mutex_init_get_err(mutex_res);
 		goto err;
 	}
+
 	pool->job_id_prev = -1;
 	pool->pool_flags = 0;
-	if (error_code != 0) {
+	struct fiber_queue_init_result queue_res = pool->queue_ops->init(
+		opts->queue_length, pool->malloc, pool->free);
+	if (queue_res.error != 0) {
+		res.error = queue_res.error;
 		goto err;
 	}
-	int queue_res = pool->queue_ops->init(
-		&pool->job_queue, opts->queue_length, pool->malloc, pool->free);
-	if (queue_res != 0) {
-		error_code = queue_res;
+	if (queue_res.queue == NULL) {
+		res.error = FBR_EQUE_NULL;
 		goto err;
 	}
-	if (pool->job_queue == NULL) {
-		error_code = FBR_EQUE_NULL;
-		goto err;
-	}
+	pool->job_queue = queue_res.queue;
 	int tp_init = fiber_thread_pool_init(pool, opts->threads_number);
 	if (tp_init != 0) {
-		error_code = tp_init;
+		res.error = tp_init;
 		goto err;
 	}
-	return 0;
+
+	assert(res.error == 0,
+	       "Finished fiber_init with an unhandled error code.");
+	res.pool = pool;
+	return res;
 err:
 	if (mutex_res == 0) {
 		int des_res = pthread_mutex_destroy(&pool->lock);
 		assert(des_res == 0, "failed to destroy mutex");
 	}
-	if (queue_res == 0 && pool->job_queue != NULL) {
+	if (queue_res.error == 0 && pool->job_queue != NULL) {
 		pool->queue_ops->free(pool->job_queue);
 	}
 	if (pool->queue_ops != NULL) {
-#ifndef FIBER_NO_DEFAULT_QUEUE
-		if (pool->queue_ops != &def_queue_ops)
-#endif
-			pool->free((struct fiber_queue_operations *)
-					   pool->queue_ops);
+		pool->free((struct fiber_queue_operations *)pool->queue_ops);
 	}
-	return error_code;
+	return res;
 }
 
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
@@ -184,10 +173,8 @@ void fiber_free(struct fiber_pool *pool)
 	fiber_thread_pool_free(pool);
 	int des_res = pthread_mutex_destroy(&pool->lock);
 	assert(des_res == 0, "failed to destroy mutex");
-#ifndef FIBER_NO_DEFAULT_QUEUE
-	if (pool->queue_ops != &def_queue_ops)
-#endif
-		pool->free((struct fiber_queue_operations *)pool->queue_ops);
+	pool->free((struct fiber_queue_operations *)pool->queue_ops);
+	pool->free(pool);
 }
 
 void fiber_wait(struct fiber_pool *pool)
@@ -309,19 +296,22 @@ static jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 
 static inline jid get_and_update_jid(jid *job_id_prev)
 {
-	// 64 bits will probably never overflow but 32 or less may
-#if JOB_ID_MAX < INT64_MAX || defined(FIBER_CHECK_JID_OVERFLOW)
+#if FIBER_CHECK_JID_OVERFLOW != 0
+	jid next;
 	jid prev = __atomic_load_n(job_id_prev, __ATOMIC_SEQ_CST);
-	__fbr_atomic_ruw(jid, job_id_prev, prev,
-			 prev == JOB_ID_MAX ? -1 : prev);
+	do {
+		next = prev == FIBER_JID_MAX ? -1 : prev;
+	} while (!__atomic_compare_exchange_n(job_id_prev, &prev, next, 0,
+					      __ATOMIC_SEQ_CST,
+					      __ATOMIC_SEQ_CST));
 #endif
 	return __atomic_add_fetch(job_id_prev, 1, __ATOMIC_RELEASE);
 }
 
 static struct fiber_queue_operations *
-init_queue_ops(struct fiber_queue_operations *ops, void *(*malloc)(size_t))
+init_queue_ops(struct fiber_queue_operations *ops, void *(*_malloc)(size_t))
 {
-	struct fiber_queue_operations *a_ops = malloc(sizeof(*ops));
+	struct fiber_queue_operations *a_ops = _malloc(sizeof(*ops));
 	if (a_ops == NULL) {
 		return NULL;
 	}
@@ -372,7 +362,7 @@ err:
 
 static void fiber_thread_pool_free(struct fiber_pool *pool)
 {
-	pthread_cancel_n(pool->thread_head, THREAD_POOL_SIZE_MAX);
+	pthread_cancel_n(pool->thread_head, FIBER_TPSIZE_MAX);
 	thread_ll_free(pool->thread_head, pool->free);
 	int des_res = sem_destroy(&pool->threads_sync);
 	assert(des_res == 0, "failed to destroy semaphore");
@@ -518,7 +508,8 @@ static void *worker_loop(void *arg)
 	int last_handle_flags_res = 0;
 	while (1) {
 		__atomic_store_n(&self->job_id, -1, __ATOMIC_RELAXED);
-		int pop_res = job_pop(pool->job_queue, &job_buf, FIBER_BLOCK);
+		int pop_res =
+			job_pop(pool->job_queue, &job_buf, FIBER_QUEUE_BLOCK);
 		if (pop_res != 0) {
 			sched_yield();
 			continue;
@@ -579,7 +570,7 @@ static int wake_worker_thread(struct fiber_pool *pool)
 	assert(pool != NULL, "caller did not check pool for NULL");
 	// Put a job onto the queue whose sole purpose is to wake up
 	// a thread and allow it to handle the flags we just set.
-	int res = __fiber_job_push(pool, &wake_job, FIBER_BLOCK);
+	int res = __fiber_job_push(pool, &wake_job, FIBER_QUEUE_BLOCK);
 	assert(res != FBR_ENULL_ARGS,
 	       "we passed a null job or job_func. check wake_job global");
 	return res < 0 ? res : 0;

@@ -6,7 +6,7 @@
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
-#ifdef FIBER_ASSERTS
+#if FIBER_ASSERTS != 0
 #include <stdio.h>
 #include <stdlib.h>
 #define assert(expr, err_msg)                                          \

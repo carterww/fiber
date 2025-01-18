@@ -18,7 +18,7 @@ There are a couple of behaviors Fiber expects in order to make the job queue int
 If your queue meets these requirements, it will integrate nicely with Fiber. These functions can be passed to *fiber_init* through the *fiber_init_options* struct.
 
 # Planned Updates
-1. **Cleaning up the public interface**: fiber.h exposes too many unnecessary details. I'd like to split the file into two: fiber.h and fiber_internal.h. This creates a clear separation between the public interface and the implementation.
+1. **Cleaning up the public interface**: (*Completed*) fiber.h exposes too many unnecessary details. I'd like to split the fiber.h file into fiber.h and fiber_internal.h. This creates a clear separation between the public interface and the implementation.
 2. **Enable more compiler warnings and compile with 0 warnings**: Self explanatory. This is good practice.
 3. **Enable -pedantic where possible**: To promote portability, we should attempt to compile as much code as possible with the pedantic flag. This ensures we are not using non-portable compiler extensions.
 4. **Switch to ANSI C (Maybe)**: I like the idea of the code being as portable as possible. This is a maybe because it would require a lot of work with little immediate payoff.

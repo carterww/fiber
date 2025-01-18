@@ -5,9 +5,7 @@
 #include <unistd.h>
 
 #include "fiber.h"
-#include "job_queue.h"
-
-struct fiber_pool pool = { 0 };
+#include "fiber_fifo.h"
 
 static int fib_to = 100000;
 static int jobs_num = 500000;
@@ -31,14 +29,23 @@ void *runner(void *arg)
 
 int main(int argc, char *argv[])
 {
-	struct fiber_pool_init_options pool_opts = {
-		.queue_ops = NULL, // Use default FIFO
-		.queue_length = queue_len,
-		.threads_number = threads_num,
-	};
-	int init_res = fiber_init(&pool, &pool_opts);
-	if (init_res != 0) {
-		return 1;
+	struct fiber_pool *pool = NULL;
+	{
+		// Use the fifo queue implementation
+		struct fiber_queue_operations queue_ops =
+			FIBER_FIFO_QUEUE_OPERATIONS;
+		struct fiber_pool_init_options pool_opts = {
+			.queue_ops = &queue_ops,
+			.malloc = NULL, // Use libc malloc
+			.free = NULL, // Use libc free
+			.queue_length = queue_len,
+			.threads_number = threads_num,
+		};
+		struct fiber_init_result init_res = fiber_init(&pool_opts);
+		if (init_res.error != 0) {
+			return 1;
+		}
+		pool = init_res.pool;
 	}
 	int i = 0;
 	while (i < jobs_num) {
@@ -46,12 +53,13 @@ int main(int argc, char *argv[])
 			.job_func = runner,
 			.job_arg = NULL,
 		};
-		jid job_id = fiber_job_push(&pool, &job, FIBER_BLOCK);
+		jid job_id = fiber_job_push(pool, &job, FIBER_QUEUE_BLOCK);
 		if (job_id < 0) {
 			return 1;
 		}
 		++i;
 	}
-	fiber_wait(&pool);
+	fiber_wait(pool);
+	fiber_free(pool);
 	return 0;
 }

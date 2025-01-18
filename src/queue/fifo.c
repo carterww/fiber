@@ -1,13 +1,23 @@
 /* See LICENSE file for copyright and license details. */
 
-#ifndef FIBER_NO_DEFAULT_QUEUE
+#include "fiber.h"
 #include <errno.h>
 #include <pthread.h>
 #include <semaphore.h>
 
-#include "fiber_utils.h"
-#include "fifo_job_queue.h"
-#include "../job_queue.h"
+#include "../fiber_internal.h"
+#include "fiber_fifo.h"
+#include "../utils.h"
+
+struct fifo_jq {
+	sem_t void_num;
+	sem_t jobs_num;
+	qsize head;
+	qsize tail;
+	struct fiber_job *jobs;
+	qsize capacity;
+	void (*free)(void *);
+};
 
 static const char *sem_post_err_msg =
 	"sem_post returned error. Likely an overflow\n";
@@ -16,32 +26,35 @@ static const char *sem_post_err_msg =
 extern int __fiber_mutex_init_get_err(int error);
 extern int __fiber_sem_init_get_err(int error);
 
-int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
-			  void (*free)(void *))
+struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
+						     void *(*_malloc)(size_t),
+						     void (*_free)(void *))
 {
-	assert(queue != NULL, "fifo_init received a NULL queue");
 	assert(capacity > 0, "fifo_init received a bad capacity");
-	assert(malloc != NULL, "fifo_init received a NULL malloc func");
-	assert(free != NULL, "fifo_init received a NULL malloc func");
-	int error_code = 0;
-	struct fifo_jq *fq = malloc(sizeof(*fq));
+	assert(_malloc != NULL, "fifo_init received a NULL malloc func");
+	assert(_free != NULL, "fifo_init received a NULL malloc func");
+	struct fiber_queue_init_result res = {
+		.error = 0,
+		.queue = NULL,
+	};
+	struct fifo_jq *fq = _malloc(sizeof(*fq));
 	if (fq == NULL) {
-		error_code = ENOMEM;
+		res.error = ENOMEM;
 		goto err;
 	}
-	struct fiber_job *jobs = malloc(capacity * sizeof(*jobs));
+	struct fiber_job *jobs = _malloc(capacity * sizeof(*jobs));
 	if (jobs == NULL) {
-		error_code = ENOMEM;
+		res.error = ENOMEM;
 		goto err;
 	}
 	int sem_void_res = sem_init(&fq->void_num, 0, capacity);
 	if (sem_void_res != 0) {
-		error_code = __fiber_sem_init_get_err(errno);
+		res.error = __fiber_sem_init_get_err(errno);
 		goto err;
 	}
 	int sem_jobs_res = sem_init(&fq->jobs_num, 0, 0);
 	if (sem_jobs_res != 0) {
-		error_code = __fiber_sem_init_get_err(errno);
+		res.error = __fiber_sem_init_get_err(errno);
 		goto err;
 	}
 
@@ -50,19 +63,21 @@ int fiber_queue_fifo_init(void **queue, qsize capacity, void *(*malloc)(size_t),
 	fq->tail = 0;
 	fq->capacity = capacity;
 	fq->free = free;
-	*queue = fq;
 
-	return 0;
+	assert(res.error == 0,
+	       "Finished fiber_queue_fifo_init with an unhandled error code.");
+	res.queue = fq;
+	return res;
 err:
 	if (jobs != NULL)
-		free(jobs);
+		_free(jobs);
 	if (sem_void_res == 0)
 		sem_destroy(&fq->void_num);
 	if (sem_jobs_res == 0)
 		sem_destroy(&fq->jobs_num);
 	if (fq != NULL)
-		free(fq);
-	return error_code;
+		_free(fq);
+	return res;
 }
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
@@ -72,7 +87,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	assert(job->job_func != NULL, "fifo_push given NULL job_func");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	// Decrement semaphore
-	if (flags & FIBER_BLOCK) {
+	if (flags & FIBER_QUEUE_BLOCK) {
 		while (sem_wait(&fq->void_num) == -1 && errno == EINTR)
 			;
 	} else {
@@ -94,7 +109,7 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 	assert(queue != NULL, "fifo_pop given NULL queue");
 	assert(buffer != NULL, "fifo_pop given NULL job buffer");
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
-	if (flags & FIBER_BLOCK) {
+	if (flags & FIBER_QUEUE_BLOCK) {
 		while (sem_wait(&fq->jobs_num) == -1 && errno == EINTR)
 			;
 	} else {
@@ -132,4 +147,3 @@ qsize fiber_queue_fifo_length(void *queue)
 	}
 	return sem_val;
 }
-#endif // FIBER_NO_DEFAULT_QUEUE
