@@ -7,6 +7,17 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/** --- VERSION --- **/
+#define FIBER_VERSION_MAJOR (0)
+#define FIBER_VERSION_MINOR (2)
+#define FIBER_VERSION_PATCH (0)
+
+struct fiber_version {
+	int major;
+	int minor;
+	int patch;
+};
+
 /** --- CONFIG --- **/
 
 /** Type Definitions **/
@@ -39,7 +50,7 @@ typedef long jid; // Fiber job ID
 
 /** --- END CONFIG --- **/
 
-// Opaque structs. The definitions are in src/fiber_internal.h
+// Opaque fiber_pool struct. The definition is in src/fiber_internal.h
 struct fiber_pool;
 
 struct fiber_job {
@@ -209,6 +220,44 @@ tpsize fiber_threads_number(struct fiber_pool *pool);
  * @error FBR_ENULL_ARGS -> pool is NULL.
  */
 tpsize fiber_threads_working(struct fiber_pool *pool);
+
+/* Get the version information of the library. This is useful if you
+ * are compiling against an object file and the header may be
+ * newer.
+ * @returns -> A struct containing the major, minor, and patch version
+ * numbers.
+ */
+struct fiber_version fiber_libversion();
+
+/* Ensures the version of Fiber is compatible with the header file's version.
+ * @returns -> True if they are compatible, false if they are not.
+ */
+static inline int fiber_libversion_compatible()
+{
+	struct fiber_version libversion = fiber_libversion();
+	// A major version of 0 is a special case. Anything goes and the header file should
+	// always be in sync with the library.
+	if (libversion.major == 0 || FIBER_VERSION_MAJOR == 0) {
+		return libversion.major == FIBER_VERSION_MAJOR &&
+		       libversion.minor == FIBER_VERSION_MINOR &&
+		       libversion.patch == FIBER_VERSION_PATCH;
+	}
+	// If the header file is has a newer major version, it may contain more
+	// features.
+	if (libversion.major < FIBER_VERSION_MAJOR) {
+		return 0;
+	}
+	if (libversion.major == FIBER_VERSION_MAJOR &&
+	    libversion.minor < FIBER_VERSION_MINOR) {
+		return 0;
+	}
+	// At this point we know the major version is not 0 and either
+	// 1. The library's major version is greater than the header file's.
+	// 2. The library's major version is equal to the header file's and
+	//    the library's minor version is greater than or equal to the header
+	//    file's.
+	return 1;
+}
 
 /** ERROR CODES **/
 

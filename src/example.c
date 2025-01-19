@@ -47,6 +47,15 @@ int main(int argc, char *argv[])
 		}
 		pool = init_res.pool;
 	}
+	if (!fiber_libversion_compatible()) {
+		const struct fiber_version libversion = fiber_libversion();
+		printf("The header file version you are using is not compatible with the library's.\n");
+		printf("Header file version: %d.%d.%d\n", FIBER_VERSION_MAJOR,
+		       FIBER_VERSION_MINOR, FIBER_VERSION_PATCH);
+		printf("Library's version:   %d.%d.%d\n", libversion.major,
+		       libversion.minor, libversion.patch);
+		return 1;
+	}
 	int i = 0;
 	while (i < jobs_num) {
 		struct fiber_job job = {

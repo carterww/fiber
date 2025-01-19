@@ -12,6 +12,13 @@
 #include "fiber_internal.h"
 #include "utils.h"
 
+/** Version of lib **/
+static const struct fiber_version libversion = {
+	.major = FIBER_VERSION_MAJOR,
+	.minor = FIBER_VERSION_MINOR,
+	.patch = FIBER_VERSION_PATCH,
+};
+
 struct pthread_arg {
 	struct fiber_pool *pool;
 	struct fiber_thread *self;
@@ -26,7 +33,7 @@ static struct fiber_job wake_job = { .job_id = FIBER_JID_MIN,
 				     .job_func = __do_nothing_job,
 				     .job_arg = NULL };
 
-// fifo_job_queue.c uses these
+// fifo_job_queue.c uses these so they are not declared as static
 int __fiber_mutex_init_get_err(int error);
 int __fiber_sem_init_get_err(int error);
 int __fiber_pthread_create_get_err(int error);
@@ -275,6 +282,11 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 		return FBR_ENULL_ARGS;
 	}
 	return __atomic_load_n(&pool->threads_working, __ATOMIC_RELAXED);
+}
+
+struct fiber_version fiber_libversion()
+{
+	return libversion;
 }
 
 static jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
