@@ -21,12 +21,11 @@ void fiber_queue_fifo_free(void *queue);
 
 qsize fiber_queue_fifo_length(void *queue);
 
-#define FIBER_FIFO_QUEUE_OPERATIONS                                           \
-	(struct fiber_queue_operations)                                       \
-	{                                                                     \
-		.push = fiber_queue_fifo_push, .pop = fiber_queue_fifo_pop,   \
-		.init = fiber_queue_fifo_init, .free = fiber_queue_fifo_free, \
-		.length = fiber_queue_fifo_length,                            \
+#define FIBER_FIFO_QUEUE_OPERATIONS                                   \
+	{                                                             \
+		fiber_queue_fifo_push, fiber_queue_fifo_pop,          \
+			fiber_queue_fifo_init, fiber_queue_fifo_free, \
+			fiber_queue_fifo_length,                      \
 	}
 
-#endif // _FIBER_QUEUE_FIFO_H
+#endif /* _FIBER_QUEUE_FIFO_H */

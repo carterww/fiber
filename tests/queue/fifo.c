@@ -1,11 +1,11 @@
 #include <errno.h>
-#include <semaphore.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 #include "fiber.h"
 #include "src/queue/fifo.c"
+#include "src/threading.h"
 #include "xtal.h"
 
 static void setup(qsize cap);
@@ -24,7 +24,7 @@ static void push_phony_job(jid id)
 	};
 	jq->tail = 1;
 	*jq->jobs = test;
-	sem_post(&jq->jobs_num);
+	fiber_sem_post(&jq->jobs_num);
 }
 
 TEST(fifo_init)

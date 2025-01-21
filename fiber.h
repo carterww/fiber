@@ -9,7 +9,7 @@
 
 /** --- VERSION --- **/
 #define FIBER_VERSION_MAJOR (0)
-#define FIBER_VERSION_MINOR (2)
+#define FIBER_VERSION_MINOR (3)
 #define FIBER_VERSION_PATCH (0)
 
 struct fiber_version {
@@ -22,10 +22,10 @@ struct fiber_version {
 
 /** Type Definitions **/
 
-// These must be signed
-typedef int tpsize; // Threads in pool
-typedef int qsize; // Queue size
-typedef long jid; // Fiber job ID
+/* These must be signed */
+typedef int tpsize; /* Threads in pool */
+typedef int qsize; /* Queue size */
+typedef long jid; /* Fiber job ID */
 #define FIBER_TPSIZE_MAX (INT_MAX)
 #define FIBER_QSIZE_MAX (INT_MAX)
 #define FIBER_JID_MAX (LONG_MAX)
@@ -33,16 +33,28 @@ typedef long jid; // Fiber job ID
 
 /** Debugging Options **/
 
-// If 0, runtime assertions will not be compiled.
-#define FIBER_ASSERTS 1
+/* If 0, runtime assertions will not be compiled. */
+#define FIBER_ASSERTS (1)
 
 /** Core Options **/
 
-// If 0, fiber will not check if job ids overflow. This can be problematic if
-// the type jid is < 64 bits because a negative job id is invalid.
-#define FIBER_CHECK_JID_OVERFLOW 1
-// Define overflow check if the max JID is < 64 bits. This is a safety thing.
-// Override at your own risk...
+/* Whether to use pthreads as the underlying threads library. Currently, this
+ * is the only supported option. If this is 0, you must declare the necessary
+ * macros and types in src/threading.h and implement the functions declared in
+ * src/threading.h. See src/threading.h and src/threading_pthread.c on how
+ * this can be done.
+ * If you do implement src/threading.h's interface with a different threads
+ * library, I'll gladly merge it.
+ */
+#define FIBER_USE_PTHREADS (1)
+
+/* If 0, fiber will not check if job ids overflow. This can be problematic if
+ * the type jid is < 64 bits because a negative job id is invalid.
+ */
+#define FIBER_CHECK_JID_OVERFLOW (1)
+/* Define overflow check if the max JID is < 64 bits. This is a safety thing.
+ * Override at your own risk...
+ */
 #if FIBER_JID_MAX < INT64_MAX && FIBER_CHECK_JID_OVERFLOW == 0
 #undef FIBER_CHECK_JID_OVERFLOW
 #define FIBER_CHECK_JID_OVERFLOW 1
@@ -50,7 +62,7 @@ typedef long jid; // Fiber job ID
 
 /** --- END CONFIG --- **/
 
-// Opaque fiber_pool struct. The definition is in src/fiber_internal.h
+/* Opaque fiber_pool struct. The definition is in src/fiber_internal.h */
 struct fiber_pool;
 
 struct fiber_job {
@@ -65,7 +77,7 @@ struct fiber_queue_init_result {
 };
 
 struct fiber_queue_operations {
-	// These four functions are required
+	/* These four functions are required */
 	int (*push)(void *queue, struct fiber_job *job, uint32_t flags);
 	int (*pop)(void *queue, struct fiber_job *buffer, uint32_t flags);
 	struct fiber_queue_init_result (*init)(qsize capacity,
@@ -73,7 +85,7 @@ struct fiber_queue_operations {
 					       void (*free)(void *));
 	void (*free)(void *queue);
 
-	// Optional
+	/* Optional */
 	qsize (*length)(void *queue);
 };
 
@@ -85,7 +97,7 @@ struct fiber_pool_init_options {
 	qsize queue_length;
 };
 
-// Result of fiber_init. pool is a valid pointer iff error = 0.
+/* Result of fiber_init. pool is a valid pointer iff error = 0. */
 struct fiber_init_result {
 	int error;
 	struct fiber_pool *pool;
@@ -227,23 +239,26 @@ tpsize fiber_threads_working(struct fiber_pool *pool);
  * @returns -> A struct containing the major, minor, and patch version
  * numbers.
  */
-struct fiber_version fiber_libversion();
+struct fiber_version fiber_libversion(void);
 
 /* Ensures the version of Fiber is compatible with the header file's version.
  * @returns -> True if they are compatible, false if they are not.
  */
-static inline int fiber_libversion_compatible()
+static int fiber_libversion_compatible(void)
 {
-	struct fiber_version libversion = fiber_libversion();
-	// A major version of 0 is a special case. Anything goes and the header file should
-	// always be in sync with the library.
+	struct fiber_version libversion;
+	libversion = fiber_libversion();
+	/* A major version of 0 is a special case. Anything goes and the header file should
+	 * always be in sync with the library.
+         */
 	if (libversion.major == 0 || FIBER_VERSION_MAJOR == 0) {
 		return libversion.major == FIBER_VERSION_MAJOR &&
 		       libversion.minor == FIBER_VERSION_MINOR &&
 		       libversion.patch == FIBER_VERSION_PATCH;
 	}
-	// If the header file is has a newer major version, it may contain more
-	// features.
+	/* If the header file is has a newer major version, it may contain more
+	 * features.
+         */
 	if (libversion.major < FIBER_VERSION_MAJOR) {
 		return 0;
 	}
@@ -251,32 +266,34 @@ static inline int fiber_libversion_compatible()
 	    libversion.minor < FIBER_VERSION_MINOR) {
 		return 0;
 	}
-	// At this point we know the major version is not 0 and either
-	// 1. The library's major version is greater than the header file's.
-	// 2. The library's major version is equal to the header file's and
-	//    the library's minor version is greater than or equal to the header
-	//    file's.
+	/* At this point we know the major version is not 0 and either
+	 * 1. The library's major version is greater than the header file's.
+	 * 2. The library's major version is equal to the header file's and
+	 *    the library's minor version is greater than or equal to the header
+	 *    file's.
+         */
 	return 1;
 }
 
 /** ERROR CODES **/
 
-#define FBR_EPUSH_JOB -1
+#define FBR_EPUSH_JOB (-1)
 #define FBR_EINVLD_JOB FBR_EPUSH_JOB
-#define FBR_EMTX_INIT -2
-#define FBR_ENULL_ARGS -3
-#define FBR_EINVLD_SIZE -4
-#define FBR_EQUE_NULL -5
-#define FBR_ENO_RSC -6
-#define FBR_EPTHRD_PERM -7
-#define FBR_ESEM_RNG -8
-#define FBR_EQUEOPS_NONE -9
-#define FBR_EPOOL_UNINIT -10
+#define FBR_EMTX_INIT (-2)
+#define FBR_ENULL_ARGS (-3)
+#define FBR_EINVLD_SIZE (-4)
+#define FBR_EQUE_NULL (-5)
+#define FBR_ENO_RSC (-6)
+#define FBR_EPTHRD_PERM (-7)
+#define FBR_ESEM_RNG (-8)
+#define FBR_EQUEOPS_NONE (-9)
+#define FBR_EPOOL_UNINIT (-10)
+#define FBR_ETHRD_LIMIT (-11)
 
 /** Flags **/
 
-// Job Queue Flags
+/* Job Queue Flags */
 #define FIBER_QUEUE_BLOCK (1 << 31)
 #define FIBER_QUEUE_NO_BLOCK 0
 
-#endif // FIBER_H
+#endif /* FIBER_H */
