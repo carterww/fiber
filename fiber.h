@@ -48,6 +48,12 @@ typedef long jid; /* Fiber job ID */
  */
 #define FIBER_USE_PTHREADS (1)
 
+/* Whether to compile the FIFO queue into the binary. If this is not
+ * enabled, functions declared in fiber_fifo.h will not be implemented
+ * and should not be used.
+ */
+#define FIBER_COMPILE_FIFO_QUEUE (1)
+
 /* If 0, fiber will not check if job ids overflow. This can be problematic if
  * the type jid is < 64 bits because a negative job id is invalid.
  */

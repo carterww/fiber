@@ -30,7 +30,18 @@
 #include "threading_pthread.c"
 #else
 #error "FIBER_USE_PTHREADS was disabled in fiber.h but there is no alternative threading implementation included."
-#endif /* FIBER_USE_PTHREADS */
+#endif
+
+#if FIBER_COMPILE_FIFO_QUEUE != 0
+#include "queue/fifo.c"
+#endif
+
+/* Error if a queue implementation is not compiled into the bin. If you have add
+ * another queue implementation, be sure to add it.
+ */
+#if FIBER_COMPILE_FIFO_QUEUE == 0
+#error "It seems no queue implementation is being compiled into the binary."
+#endif
 
 /* Helper function associated with fiber_job_push. It only pushes the job to the
  * queue and returns the job id. Unlike fiber_job_push, it does not set the job

@@ -7,7 +7,7 @@ C_PEDANTIC_FLAGS = -Wpedantic
 C_FLAGS = -I. -O2 -std=c89 $(C_WARNING_FLAGS)
 C_TEST_FLAGS = -I. -Itests -g -O2 -std=c11 $(C_WARNING_FLAGS)
 
-OBJ = fiber.o queue/fifo.o
+OBJ = fiber.o
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
 
 all: lib
@@ -16,7 +16,7 @@ lib: bin build $(OBJ_OUT)
 	ar rcs bin/lib$(TARGET).a $(OBJ_OUT)
 
 lib_so: C_FLAGS+=-fpic
-lib_so: bin build $(OBJ_OUT)
+lib_so: clean bin build $(OBJ_OUT)
 	$(CC) -shared -o bin/lib$(TARGET).so $(OBJ_OUT)
 
 example: lib build/example.o

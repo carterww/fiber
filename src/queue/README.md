@@ -40,3 +40,9 @@ requirements are met, your queue should seamlessly integrate into Fiber.
   fiber.h is preferred, but you can define custom errors that do not conflict with those.
 - *push* must copy the contents of the job into its own data structure(s). It should not
   store a reference to the job argument in any way.
+
+## Adding your Queue
+In order to add your queue to the build follow these steps:
+1. Define a boolean flag in fiber.h in the form "#define FIBER_COMPILE_\[QUEUE_NAME\]_QUEUE (1)"
+2. Add a guard around the #include of the C file in src/fiber.c (see how the fifo is done).
+3. Add your flag to the check that raises a compile time error if no queue implementation is defined.
