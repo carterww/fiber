@@ -5,6 +5,7 @@
 #include "src/threading.h"
 #include "src/utils.h"
 
+/* Definition of the opaque job queue pointer declared in fiber_fifo.h */
 struct fifo_jq {
 	fiber_semaphore void_num;
 	fiber_semaphore jobs_num;

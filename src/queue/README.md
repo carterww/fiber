@@ -38,3 +38,5 @@ requirements are met, your queue should seamlessly integrate into Fiber.
 - If the function returns an int, a 0 value should be returned to indicate a success
   and a non-zero should be returned to indicate an error. An error value defined in
   fiber.h is preferred, but you can define custom errors that do not conflict with those.
+- *push* must copy the contents of the job into its own data structure(s). It should not
+  store a reference to the job argument in any way.
