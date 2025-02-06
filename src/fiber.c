@@ -163,6 +163,7 @@ void fiber_free(struct fiber_pool *pool)
          * can figure out what parts to free/cleanup.
          */
 	fiber_free_queue(pool);
+
 	des_res = fiber_mutex_destroy(&pool->lock);
 	fiber_assert(des_res == 0);
 	des_res = fiber_sem_destroy(&pool->threads_sync);
@@ -175,6 +176,7 @@ void fiber_wait(struct fiber_pool *pool)
 	tpsize working;
 	tpsize length;
 	uint32_t off;
+
 	if (pool == NULL) {
 		return;
 	}
@@ -210,8 +212,6 @@ qsize fiber_jobs_pending(struct fiber_pool *pool)
 	return pool->queue_ops->length(pool->job_queue);
 }
 
-/* THREAD CONTROL/INFO FUNCTIONS */
-
 int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 {
 	if (pool == NULL) {
@@ -244,7 +244,7 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 	if (threads_num < 1) {
 		return FBR_EINVLD_SIZE;
 	}
-	fiber_assert(pool->threads_number + threads_num > 0);
+
 	thread_list_result = fiber_thread_list_alloc(threads_num, pool->malloc);
 	if (thread_list_result.error != 0) {
 		return thread_list_result.error;

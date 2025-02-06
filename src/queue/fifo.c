@@ -31,12 +31,12 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 
 	fq = _malloc(sizeof(*fq));
 	if (fq == NULL) {
-		res.error = FBR_ENO_RSC;
+		res.error = FBR_ENOMEM;
 		goto err;
 	}
 	jobs = _malloc(capacity * sizeof(*jobs));
 	if (jobs == NULL) {
-		res.error = FBR_ENO_RSC;
+		res.error = FBR_ENOMEM;
 		goto err;
 	}
 	sem_void_res = fiber_sem_init(&fq->void_num, capacity);

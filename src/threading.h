@@ -121,6 +121,7 @@ int fiber_sem_getvalue(fiber_semaphore *sem, int *value_out);
  * @returns -> 0 if the call was successful, an error otherwise.
  * @error FBR_ENO_RSC -> The system did not have resources to initialize the mutex.
  * @error FBR_EPTHRD_PERM -> The process does not have permission to initialize a mutex.
+ * @error FBR_ENOMEM -> The system did not have sufficient memory to initialize the mutex.
  */
 int fiber_mutex_init(fiber_mutex *mut);
 
@@ -239,7 +240,7 @@ int fiber_thread_cancel(const tid *thread_id);
 
 /** Error codes **/
 
-#define FBR_ETHREADING_EINTR (EINTR)
-#define FBR_ETHREADING_EAGAIN (EAGAIN)
+#define FBR_ETHREADING_EINTR (-1 * EINTR)
+#define FBR_ETHREADING_EAGAIN (-1 * EAGAIN)
 
 #endif /* _FIBER_THREADING_H */

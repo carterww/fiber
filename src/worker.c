@@ -41,7 +41,7 @@ int fiber_workers_start(struct fiber_pool *pool,
 		struct fiber_worker_thread_arg *arg =
 			pool->malloc(sizeof(*arg));
 		if (arg == NULL) {
-			error_code = FBR_ENO_RSC;
+			error_code = FBR_ENOMEM;
 			goto err;
 		}
 		arg->pool = pool;

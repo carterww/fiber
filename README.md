@@ -6,28 +6,16 @@ library. Fiber's features include:
 2. The ability to add and remove threads after initialization.
 3. The ability to wait for all jobs to be completed.
 4. The ability to use custom memory allocators.
+
 ## API
 Each function's behavior is thoroughly documented in [fiber.h](fiber.h).
-# Writing a Custom Queue
-Fiber makes it easy to provide a custom queue implementation at thread pool initialzation time.
-Before diving into it, check out [job_queue.h](job_queue.h) and
-[fifo_job_queue.c](queue_impls/fifo_job_queue.c) to see the queue API Fiber expects.
-## Requirements
-There are a couple of behaviors Fiber expects in order to make the job queue integrate well
-with the thread pool.
-1. The *push* and *pop* functions should **NOT** use any of the most significant bits in
-   *uint32_t flags*. Right now, this is used for blocking behavior.
-2. The *pop* function **SHOULD** check for the flag FIBER_BLOCK and block when there are
-   no jobs to execute. If FIBER_BLOCK is not provided, it should return a value of zero to
-   indicate *buffer* has a job and a non-zero value to indicate there are no jobs.
-    - To see why, inspect the *worker_loop* function in [fiber.c](fiber.c).
-3. The *push* function should never return a postive number to indicate failure. *Push* is
-   used by fiber_job_push and a positive return value from this corresponds to a valid job id.
-    - To see why, inspect the *\__fiber_job_push* function in [fiber.c](fiber.c).
-If your queue meets these requirements, it will integrate nicely with Fiber. These functions can
-be passed to *fiber_init* through the *fiber_init_options* struct.
 
-# Planned Updates
+## Writing a Custom Job Queue
+Fiber provides a default [job queue implementation](fiber_fifo.h) that should fulfil most needs,
+but you can easily integrate a custom job queue into Fiber. If you are interested in writing
+your own job queue for fiber, please read the [requirements](src/queue/README.md).
+
+## Planned Updates
 1. **Cleaning up the public interface**: (*Completed*) fiber.h exposes too many unnecessary
    details. I'd like to split the fiber.h file into fiber.h and fiber_internal.h. This creates a
    clear separation between the public interface and the implementation.
@@ -47,12 +35,9 @@ be passed to *fiber_init* through the *fiber_init_options* struct.
 11. **Add more test cases**: Can never have too many.
 12. **Test with Thread Sanitizer**: Clang library used for detecting race conditions.
 
-# Versioning
-Fiber uses semantic versioning with one major caveat: fiber will be backwards compatible starting at
-v1.0.0. Increments to the major version will not correspond to breaking changes; rather, it will
-correspond to major features being added, many functions being deprecated, etc.
-
-Fiber defines a set of macros in fiber.h: FIBER_VERSION_\[MAJOR|MINOR|PATCH\]. There is also a struct
+## Versioning
+Fiber provides definitions for each version number required by Semantic Versioning 2.0.0.
+These are defined in fiber.h as FIBER_VERSION_\[MAJOR|MINOR|PATCH\]. There is also a struct
 defined in src/fiber.c that contains the major, minor, and patch of the current build that can be
 accessed by fiber_libversion(). The function fiber_libversion_compatible() can be used to ensure your
 project is using a header file that is compatible with the library's version. Calling this function on

@@ -157,8 +157,9 @@ int fiber_mutex_init(fiber_mutex *mut)
 	case EAGAIN: /* System did not have resource to init mutx (excluding mem). */
 		return FBR_ENO_RSC;
 	case EPERM: /* Does not have permission to init mutex */
-	case ENOMEM: /* No memory */
 		return FBR_EPTHRD_PERM;
+	case ENOMEM: /* No memory */
+		return FBR_ENOMEM;
 	default:
 		panic(1);
 	}
