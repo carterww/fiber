@@ -1,9 +1,8 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "src/atomic.h"
-#include <errno.h>
 #include <stdint.h>
 
+#include "atomic.h"
 #include "fiber.h"
 #include "threading.h"
 #include "thread_list.h"
@@ -60,9 +59,6 @@ int fiber_workers_start(struct fiber_pool *pool,
 
 	return 0;
 err:
-	if (i > 0) {
-		fiber_workers_cancel(threads_head, i);
-	}
 	while (prev != NULL) {
 		struct fiber_worker_thread_arg *saved = prev->prev;
 		pool->free(prev);
@@ -79,10 +75,7 @@ int fiber_worker_start(struct fiber_worker_thread_arg *arg)
 	/* TODO: Ensure threading functions return fiber error. */
 	error_code = fiber_thread_create(&arg->thread->thread_id,
 					 fiber_worker_runner, arg);
-	if (error_code != 0) {
-		return error_code;
-	}
-	return fiber_thread_detach(&arg->thread->thread_id);
+	return error_code;
 }
 
 void *fiber_worker_runner(void *fiber_worker_thread_arg)
@@ -106,6 +99,15 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 
 	fiber_worker_loop(pool, thread);
 
+	/* Thread is already done, let it clean itself up uninterrupted. */
+	fiber_thread_cancel_disable();
+	/* Detach the thread if we "canceled" it this way. Reaching this point
+         * indicates we canceled the thread with fiber_thread_remove. If that's
+         * the case, nobody will fiber_thread_join this thread. We must do this
+         * after cancelation is disabled so we don't accidentally cancel then
+         * attempt to join a detached thread.
+         */
+	fiber_thread_detach(&arg->thread->thread_id);
 	/* Pop and execute fiber_worker_runner_cleanup */
 	fiber_thread_cleanup_pop(1);
 	fiber_thread_exit(NULL);
@@ -116,11 +118,29 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 void fiber_workers_cancel(struct fiber_thread *threads_head,
 			  tpsize threads_number)
 {
-	tpsize i = 0;
-	while (threads_head != NULL && i < threads_number) {
-		int res = fiber_thread_cancel(&threads_head->thread_id);
+	struct fiber_thread *curr;
+	tpsize i;
+
+	curr = threads_head;
+	i = 0;
+	while (curr != NULL && i < threads_number) {
+		struct fiber_thread *next;
+		int res;
+		tid curr_tid;
+
+		/* Canceling and joining like this is inefficient but it
+                 * avoids needing to malloc an array to store thread_ids.
+                 * When the thread cleans up after itself, it frees the fiber_thread
+                 * struct. We need to store the thread id in order to join.
+                 */
+		curr_tid = curr->thread_id;
+		next = curr->next;
+		/* Don't access curr after this point */
+		res = fiber_thread_cancel(&curr_tid);
 		fiber_assert(res == 0);
-		threads_head = threads_head->next;
+		res = fiber_thread_join(&curr_tid, NULL);
+		fiber_assert(res == 0);
+		curr = next;
 		++i;
 	}
 }
@@ -145,16 +165,12 @@ void fiber_worker_wake_other(struct fiber_pool *pool)
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg)
 {
 	struct fiber_worker_thread_arg *arg;
-	struct fiber_pool *pool;
-	struct fiber_thread *thread;
 
 	fiber_assert(fiber_worker_thread_arg != NULL);
 	arg = (struct fiber_worker_thread_arg *)fiber_worker_thread_arg;
 
-	pool = arg->pool;
-	thread = arg->thread;
-	fiber_assert(pool != NULL);
-	fiber_assert(thread != NULL);
+	fiber_assert(arg->pool != NULL);
+	fiber_assert(arg->thread != NULL);
 
 	__fiber_worker_runner_cleanup(arg);
 }

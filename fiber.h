@@ -289,6 +289,8 @@ static int fiber_libversion_compatible(void)
 #define FBR_EQUEOPS_NONE (-9)
 #define FBR_EPOOL_UNINIT (-10)
 #define FBR_ETHRD_LIMIT (-11)
+#define FBR_ENO_ALLOC (-12)
+#define FBR_ENOMEM (-13)
 
 /** Flags **/
 

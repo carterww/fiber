@@ -19,7 +19,7 @@ struct fiber_thread {
 struct fiber_pool {
 	fiber_mutex lock;
 	jid job_id_prev;
-	const struct fiber_queue_operations *queue_ops;
+	struct fiber_queue_operations *queue_ops;
 	void *job_queue;
 	struct fiber_thread *thread_head;
 	tpsize threads_number;

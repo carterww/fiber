@@ -1,4 +1,4 @@
-CC = gcc
+CC = cc
 TARGET = fiber
 
 C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal -Wdouble-promotion -Wformat-overflow -Wformat=2 -Wnull-dereference -Wmissing-include-dirs -Wswitch-default -Wswitch-enum

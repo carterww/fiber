@@ -1,6 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -43,8 +44,8 @@ int main(void)
 
 		/* Use the fifo queue implementation */
 		pool_opts.queue_ops = &queue_ops;
-		pool_opts.malloc = NULL; /* Use libc malloc */
-		pool_opts.free = NULL; /* Use libc free */
+		pool_opts.malloc = malloc; /* Use libc malloc */
+		pool_opts.free = free; /* Use libc free */
 		pool_opts.queue_length = queue_len;
 		pool_opts.threads_number = threads_num;
 

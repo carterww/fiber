@@ -180,6 +180,18 @@ void fiber_thread_exit(void *ret_val);
  */
 int fiber_thread_detach(const tid *thread_id);
 
+/* Waits for a thread created with fiber_thread_create to terminate. After this function
+ * returns, it is guaranteed that the thread has terminated. The thread's return value
+ * is placed in ret_val. Calling this function on a joined thread results in undefined
+ * behavior.
+ * @param thread_id -> The id of the thread to join.
+ * @param ret_val -> Return value of the thread. The return value (type of void *) is
+ * placed in ret_val. If ret_val is NULL, the return value of the thread is not returned.
+ * @note As of now, there are no error codes returned by this function. All error cases
+ * indicate a bug so we panic.
+ */
+int fiber_thread_join(const tid *thread_id, void **ret_val);
+
 /* Allows a thread created by fiber_thread_create to enable cancelation. After this
  * call, the thread will not block any cancelation request from fiber_thread_cancel.
  * Calling this function from outside a thread created with fiber_thread_create results in

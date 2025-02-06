@@ -12,6 +12,10 @@ struct fiber_thread_list_init_result {
 	struct fiber_thread *threads_head;
 };
 
+/* Important note: There is no free here because each thread is responsible
+ * for freeing itself.
+ */
+
 /* Allocates threads_number fiber_thread structs.
  * @param threads_number -> The number of fiber_thread struct to allocate.
  * @param malloc -> Allocating function to use. This must not be NULL.
@@ -22,16 +26,6 @@ struct fiber_thread_list_init_result {
  */
 struct fiber_thread_list_init_result
 fiber_thread_list_alloc(tpsize threads_number, void *(*malloc)(size_t));
-
-/* Frees up to threads_number fiber_thread structs in the list threads_head.
- * @param threads_head -> The head of the list to free.
- * @param threads_number -> The maximum number of fiber_threads in the list
- * to free. The function will free until it reaches a NULL fiber_threads->next
- * or it has freed threads_number.
- * @param free -> The free function associated with malloc from fiber_thread_list_alloc.
- */
-void fiber_thread_list_free(struct fiber_thread *threads_head,
-			    tpsize threads_number, void (*free)(void *));
 
 /* Appends the list new to the head.
  * @param head -> Pointer to the pointer of the head to append to. If *head is NULL,

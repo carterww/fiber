@@ -299,6 +299,28 @@ int fiber_thread_detach(const tid *thread_id)
 	}
 }
 
+int fiber_thread_join(const tid *thread_id, void **ret_val)
+{
+	int res;
+
+	fiber_assert(thread_id != NULL);
+	res = pthread_join(*thread_id, ret_val);
+
+	switch (res) {
+	case 0:
+		return res;
+	/* Thread is not joinable (was detached) or another thread is joining the thread. */
+	case EINVAL:
+		panic(1);
+	case EDEADLK: /* Two threads were trying to join each other */
+		panic(1);
+	case ESRCH: /* No thread with the id was found */
+		panic(1);
+	default:
+		panic(1);
+	}
+}
+
 int fiber_thread_cancel_enable(void)
 {
 	return __fiber_thread_setcancelstate(PTHREAD_CANCEL_ENABLE);

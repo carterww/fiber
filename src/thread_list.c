@@ -36,20 +36,6 @@ fiber_thread_list_alloc(tpsize threads_number, void *(*_malloc)(size_t))
 	return res;
 }
 
-void fiber_thread_list_free(struct fiber_thread *threads_head,
-			    tpsize threads_number, void (*_free)(void *))
-{
-	struct fiber_thread *next;
-	tpsize i = 0;
-
-	while (threads_head != NULL && i < threads_number) {
-		next = threads_head->next;
-		_free(threads_head);
-		threads_head = next;
-		++i;
-	}
-}
-
 void fiber_thread_list_add(struct fiber_thread **head, struct fiber_thread *new)
 {
 	struct fiber_thread *next;
