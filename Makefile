@@ -49,7 +49,7 @@ example: lib build/example.o
 	$(CC) $(C_FLAGS) -Lbin $(word 2,$^) -o bin/$@ -l:lib$(TARGET).a
 
 build/threading_pthread.o: src/threading_pthread.c
-	$(CC) $(C_FLAGS) -c $< -o $@ -lpthread
+	$(CC) $(C_FLAGS) -pthread -c $< -o $@
 
 build/queue/%.o: C_FLAGS+=$(C_PEDANTIC_FLAGS)
 build/queue/%.o: src/queue/%.c
