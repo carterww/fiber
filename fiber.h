@@ -26,12 +26,18 @@ typedef long jid; /* Fiber job ID */
 #define FIBER_JID_MAX (LONG_MAX)
 #define FIBER_JID_MIN (LONG_MIN)
 
+/* Function typedefs */
+typedef void *(*malloc_function_t)(size_t size);
+typedef void (*free_function_t)(void *ptr);
+
+typedef void *(*fiber_job_function_t)(void *arg);
+
 /* Opaque fiber_pool struct. The definition is in src/fiber_internal.h */
 struct fiber_pool;
 
 struct fiber_job {
 	jid job_id;
-	void *(*job_func)(void *arg);
+	fiber_job_function_t job_func;
 	void *job_arg;
 };
 
@@ -40,27 +46,35 @@ struct fiber_queue_init_result {
 	void *queue;
 };
 
+/* Queue function typedefs */
+typedef int (*fiber_queue_push_function_t)(void *queue, struct fiber_job *job,
+					   uint32_t flags);
+typedef int (*fiber_queue_pop_function_t)(void *queue, struct fiber_job *buffer,
+					  uint32_t flags);
+typedef struct fiber_queue_init_result (*fiber_queue_init_function_t)(
+	qsize capacity, malloc_function_t _malloc, free_function_t _free);
+typedef void (*fiber_queue_free_function_t)(void *queue);
+typedef qsize (*fiber_queue_length_function_t)(void *queue);
+
 /* Queue Vtable.
  * For more information on what these functions do/how they behave, see the README in
  * src/queue.
  */
 struct fiber_queue_operations {
 	/* These four functions are required */
-	int (*push)(void *queue, struct fiber_job *job, uint32_t flags);
-	int (*pop)(void *queue, struct fiber_job *buffer, uint32_t flags);
-	struct fiber_queue_init_result (*init)(qsize capacity,
-					       void *(*malloc)(size_t),
-					       void (*free)(void *));
-	void (*free)(void *queue);
+	fiber_queue_push_function_t push;
+	fiber_queue_pop_function_t pop;
+	fiber_queue_init_function_t init;
+        fiber_queue_free_function_t free;
 
 	/* Optional */
-	qsize (*length)(void *queue);
+        fiber_queue_length_function_t length;
 };
 
 struct fiber_pool_init_options {
 	struct fiber_queue_operations *queue_ops;
-	void *(*malloc)(size_t size);
-	void (*free)(void *ptr);
+	malloc_function_t malloc;
+	free_function_t free;
 	tpsize threads_number;
 	qsize queue_length;
 };

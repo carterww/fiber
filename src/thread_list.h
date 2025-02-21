@@ -5,6 +5,7 @@
 
 #include <stddef.h>
 
+#include "fiber.h"
 #include "fiber_internal.h"
 
 struct fiber_thread_list_init_result {
@@ -25,7 +26,7 @@ struct fiber_thread_list_init_result {
  * @error FBR_ENO_RSC -> malloc returned a NULL pointer.
  */
 struct fiber_thread_list_init_result
-fiber_thread_list_alloc(tpsize threads_number, void *(*malloc)(size_t));
+fiber_thread_list_alloc(tpsize threads_number, malloc_function_t _malloc);
 
 /* Appends the list new to the head.
  * @param head -> Pointer to the pointer of the head to append to. If *head is NULL,

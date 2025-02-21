@@ -27,8 +27,8 @@ struct fiber_pool {
 	fiber_semaphore threads_sync;
 	tpsize threads_kill_number; /* Only LDR/STR this through atomic */
 	uint32_t pool_flags; /* Only LDR/STR this through atomic */
-	void *(*malloc)(size_t size);
-	void (*free)(void *ptr);
+        malloc_function_t malloc;
+        free_function_t free;
 };
 
 /** Flags **/

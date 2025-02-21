@@ -25,8 +25,8 @@ struct fifo_jq;
  * value is too large. This likely indiciates that capacity is too large.
  */
 struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
-						     void *(*malloc)(size_t),
-						     void (*free)(void *));
+						     malloc_function_t _malloc,
+						     free_function_t _free);
 
 /* Pushes a job onto the queue if there is room.
  * @param queue -> Pointer to the job queue struct.

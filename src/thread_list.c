@@ -8,7 +8,7 @@
 #include "utils.h"
 
 struct fiber_thread_list_init_result
-fiber_thread_list_alloc(tpsize threads_number, void *(*_malloc)(size_t))
+fiber_thread_list_alloc(tpsize threads_number, malloc_function_t _malloc)
 {
 	struct fiber_thread_list_init_result res;
 	struct fiber_thread *curr;

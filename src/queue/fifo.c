@@ -15,12 +15,12 @@ struct fifo_jq {
 	qsize head;
         fiber_mutex tail_lock;
 	qsize tail;
-	void (*free)(void *);
+        free_function_t free;
 };
 
 struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
-						     void *(*_malloc)(size_t),
-						     void (*_free)(void *))
+						     malloc_function_t _malloc,
+						     free_function_t _free)
 {
 	struct fifo_jq *fq = NULL;
 	struct fiber_job *jobs = NULL;
