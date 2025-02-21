@@ -209,7 +209,7 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 		int queue_pop_res;
 		int should_exit;
 
-                /* IMPORTANT: Nobody currently loads the thread's job_id and
+		/* IMPORTANT: Nobody currently loads the thread's job_id and
                  * the thread struct is private so no user should be able to.
                  * Since we only store the job_id, RELAXED can be used. This may
                  * be used in the future so it may need to be changed.
@@ -246,14 +246,14 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 				 FIBER_ATOMIC_RELAXED);
 		job->job_func(job->job_arg);
 
-                /* Speed is important here. I am prioritizing speed over getting the
+		/* Speed is important here. I am prioritizing speed over getting the
                  * most recent value 100% of the time by using RELAXED. This will be
                  * checked later (once there are no jobs on the queue) with the stronger
                  * memory ordering.
                  */
 		pool_flags = atomic_load_uint32(&pool->pool_flags,
 						FIBER_ATOMIC_RELAXED);
-                /* This flag is high priority so we must check it before
+		/* This flag is high priority so we must check it before
                  * popping a job. No other flags need to be checked.
                  */
 		if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
@@ -327,3 +327,17 @@ static void *fiber_wake_runner(void *arg)
 	(void)arg;
 	return NULL;
 }
+
+#if defined(FIBER_BUILD_ENV_TEST)
+#include "test_internal.h"
+struct fiber_test_internal_worker fiber_test_internal_worker = {
+	fiber_worker_runner_cleanup,
+	__fiber_worker_runner_cleanup,
+	fiber_worker_loop,
+	fiber_worker_execute_job,
+	fiber_worker_handle_flags,
+	fiber_worker_handle_flag_kill,
+	fiber_worker_handle_flag_wait,
+	fiber_wake_runner
+};
+#endif /* FIBER_BUILD_ENV_TEST */

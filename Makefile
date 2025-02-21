@@ -1,5 +1,11 @@
 include config.mk
 
+# This can be one of the following:
+# norm: Default build that should be used for production.
+# debug: Debug build that has symbols built in.
+# test: Special build that builds some code only used when testing.
+ENV=norm
+
 C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal \
 		  -Wdouble-promotion -Wformat-overflow -Wformat=2 \
 		  -Wnull-dereference -Wmissing-include-dirs -Wswitch-default \
@@ -10,6 +16,16 @@ C_CONFIG_FLAGS = -D"FIBER_COMPILE_ASSERTS=($(COMPILE_ASSERTS))" \
 		 -D"FIBER_COMPILE_FIBER_FIFO_QUEUE=($(COMPILE_FIBER_FIFO_QUEUE))"
 
 OBJ = fiber.o thread_list.o version.o worker.o
+
+ifeq ($(ENV),norm)
+	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_NORM"
+else ifeq ($(ENV),debug)
+	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG"
+else ifeq ($(ENV),test)
+	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST"
+else
+	$(error ENV was invalid.)
+endif
 
 ifeq ($(COMPILE_FIBER_FIFO_QUEUE),1)
 	OBJ+=queue/fifo.o

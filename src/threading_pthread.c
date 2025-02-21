@@ -366,3 +366,11 @@ int fiber_thread_cancel(const tid *thread_id)
 		panic(1);
 	}
 }
+
+#if defined(FIBER_BUILD_ENV_TEST)
+#include "test_internal.h"
+struct fiber_test_internal_threading_pthread
+	fiber_test_internal_threading_pthread = {
+		__fiber_thread_setcancelstate
+	};
+#endif /* FIBER_BUILD_ENV_TEST */

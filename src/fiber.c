@@ -410,3 +410,16 @@ static void fiber_thread_pool_end_threads(const struct fiber_pool *pool,
 		fiber_workers_cancel(thread_head, FIBER_TPSIZE_MAX);
 	}
 }
+
+#if defined(FIBER_BUILD_ENV_TEST)
+#include "test_internal.h"
+struct fiber_test_internal_fiber fiber_test_internal_fiber = {
+	__fiber_job_push,
+	fiber_validate_init_options,
+	fiber_init_queue,
+	fiber_free_queue,
+	fiber_fetch_next_jid,
+	fiber_thread_pool_start_threads,
+	fiber_thread_pool_end_threads
+};
+#endif /* FIBER_BUILD_ENV_TEST */

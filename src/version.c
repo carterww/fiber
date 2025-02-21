@@ -13,3 +13,8 @@ struct fiber_version fiber_libversion(void)
 {
 	return libversion;
 }
+
+#if defined(FIBER_BUILD_ENV_TEST)
+#include "test_internal.h"
+struct fiber_test_internal_version fiber_test_internal_version = { &libversion };
+#endif /* FIBER_BUILD_ENV_TEST */
