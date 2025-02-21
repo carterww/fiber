@@ -387,19 +387,27 @@ static void fiber_free_queue(struct fiber_pool *pool)
 
 static jid fiber_fetch_next_jid(jid *job_id_prev)
 {
+        /* The atomic operations in this function do not require total ordering
+         * because we only need to ensure job_id_prev ops are ordered correctly.
+         * Relaxed cannot be used because another thread may be reading and/or
+         * modifying job_id_prev.
+         */
 	jid j;
 #if FIBER_CHECK_JID_OVERFLOW != 0
 	jid next;
-	jid prev = atomic_load_jid(job_id_prev, FIBER_ATOMIC_SEQ_CST);
+	jid prev = atomic_load_jid(job_id_prev, FIBER_ATOMIC_ACQUIRE);
 	do {
+                /* Failure of atomic_cmpxchg places job_id_prev's value into
+                 * prev. Don't need to load on retries.
+                 */
 		next = prev == FIBER_JID_MAX ? -1 : prev;
 	} while (!atomic_compare_exchange_jid(job_id_prev, &prev, next, 1,
-					      FIBER_ATOMIC_SEQ_CST,
-					      FIBER_ATOMIC_SEQ_CST));
+					      FIBER_ATOMIC_ACQ_REL,
+					      FIBER_ATOMIC_ACQUIRE));
 #endif
-	j = atomic_load_jid(job_id_prev, FIBER_ATOMIC_SEQ_CST);
-	fiber_assert(j >= -1);
-	return atomic_add_fetch_jid(job_id_prev, 1, FIBER_ATOMIC_SEQ_CST);
+	j = atomic_add_fetch_jid(job_id_prev, 1, FIBER_ATOMIC_ACQ_REL);
+        fiber_assert(j >= 0);
+        return j;
 }
 
 static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
