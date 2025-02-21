@@ -8,14 +8,6 @@
 
 #include "fiber.h"
 
-#if defined(__GNUC__)
-#define likely(x) __builtin_expect(!!(x), 1)
-#define unlikely(x) __builtin_expect(!!(x), 0)
-#else
-#define likely(x) (x)
-#define unlikely(x) (x)
-#endif /* If builtin expect defined */
-
 #if FIBER_ASSERTS != 0
 
 /* Assert macro used to ensure an assumption is true. This assert statement
@@ -24,14 +16,19 @@
  * If the assertion fails, a debug statement is printed to stderr and the
  * program exits.
  */
-#define fiber_assert(expr)                                                     \
-	if (unlikely(!(expr))) {                                               \
-		fprintf(stderr, "ERR: assertion failed at %s:%d.\n", __FILE__, \
-			__LINE__);                                             \
-		exit(1);                                                       \
-	}
+#define fiber_assert(expr)                                                   \
+	do {                                                                 \
+		if (!(expr)) {                                               \
+			fprintf(stderr, "ERR: assertion failed at %s:%d.\n", \
+				__FILE__, __LINE__);                         \
+			exit(1);                                             \
+		}                                                            \
+	} while (0)
+
 #else
-#define fiber_assert(expr)
+#define fiber_assert(expr) \
+	do {               \
+	} while (0)
 #endif
 
 /* A panic macro that should be used when the program has entered an unrecoverable
