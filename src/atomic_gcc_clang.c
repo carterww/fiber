@@ -4,7 +4,7 @@
 
 #if !defined(__GNUC__) && !defined(__clang__)
 #warning \
-	"This file uses compiler extensions that may be be supported on your compiler."
+	"This file uses compiler extensions that may be be supported by your compiler."
 #endif
 
 /** Thread pool size atomic ops **/

@@ -6,9 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "fiber.h"
-
-#if FIBER_ASSERTS != 0
+#if FIBER_COMPILE_ASSERTS != 0
 
 /* Assert macro used to ensure an assumption is true. This assert statement
  * is used when expr must be true. If it is false, the program cannot continue

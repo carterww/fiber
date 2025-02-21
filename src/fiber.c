@@ -13,36 +13,6 @@
 #include "utils.h"
 #include "worker.h"
 
-/* I included these directly for a couple reasons:
- * 1. Putting everything in one translation unit allows the compiler to optimize
- *    more effectively. I haven't measured this so I'm only speaking in generalities.
- *    It may be the case that it makes Fiber slower!
- * 2. Usually this makes compilation slower because we cannot use an unmodified C file's
- *    previous object file. In this case, these C files are very small so the overhead is
- *    minor.
- */
-#include "atomic_gcc_clang.c"
-#include "thread_list.c"
-#include "version.c"
-#include "worker.c"
-
-#if FIBER_USE_PTHREADS != 0
-#include "threading_pthread.c"
-#else
-#error "FIBER_USE_PTHREADS was disabled in fiber.h but there is no alternative threading implementation included."
-#endif
-
-#if FIBER_COMPILE_FIFO_QUEUE != 0
-#include "queue/fifo.c"
-#endif
-
-/* Error if a queue implementation is not compiled into the bin. If you have add
- * another queue implementation, be sure to add it.
- */
-#if FIBER_COMPILE_FIFO_QUEUE == 0
-#error "It seems no queue implementation is being compiled into the binary."
-#endif
-
 /* Helper function associated with fiber_job_push. It only pushes the job to the
  * queue and returns the job id. Unlike fiber_job_push, it does not set the job
  * id.
@@ -235,7 +205,7 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (pool->queue_ops == NULL || pool->queue_ops->push == NULL) {
 		return FBR_EPOOL_UNINIT;
 	}
-        /* These cannot be reordered. */
+	/* These cannot be reordered. */
 	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, threads_num,
 				      FIBER_ATOMIC_ACQ_REL);
 	(void)atomic_or_fetch_uint32(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
@@ -388,17 +358,17 @@ static void fiber_free_queue(struct fiber_pool *pool)
 
 static jid fiber_fetch_next_jid(jid *job_id_prev)
 {
-        /* The atomic operations in this function do not require total ordering
+	/* The atomic operations in this function do not require total ordering
          * because we only need to ensure job_id_prev ops are ordered correctly.
          * Relaxed cannot be used because another thread may be reading and/or
          * modifying job_id_prev.
          */
 	jid j;
-#if FIBER_CHECK_JID_OVERFLOW != 0
+#if FIBER_COMPILE_CHECK_JID_OVERFLOW != 0
 	jid next;
 	jid prev = atomic_load_jid(job_id_prev, FIBER_ATOMIC_ACQUIRE);
 	do {
-                /* Failure of atomic_cmpxchg places job_id_prev's value into
+		/* Failure of atomic_cmpxchg places job_id_prev's value into
                  * prev. Don't need to load on retries.
                  */
 		next = prev == FIBER_JID_MAX ? -1 : prev;
@@ -407,8 +377,8 @@ static jid fiber_fetch_next_jid(jid *job_id_prev)
 					      FIBER_ATOMIC_ACQUIRE));
 #endif
 	j = atomic_add_fetch_jid(job_id_prev, 1, FIBER_ATOMIC_ACQ_REL);
-        fiber_assert(j >= 0);
-        return j;
+	fiber_assert(j >= 0);
+	return j;
 }
 
 static int fiber_thread_pool_start_threads(struct fiber_pool *pool,

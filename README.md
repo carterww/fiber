@@ -24,7 +24,7 @@ your own job queue for fiber, please read the [requirements](src/queue/README.md
    code as possible with the pedantic flag. This ensures we are not using non-portable compiler extensions.
 4. **Switch to ANSI C (Maybe)**: (*Completed*) I like the idea of the code being as portable as possible. This is a maybe
    because it would require a lot of work with little immediate payoff.
-5. **Move configuration options to config.h**: (*Completed* but in fiber.h) Self explanatory.
+5. **Move configuration options to config.h**: (*Completed* but in config.mk) Self explanatory.
 6. **Decouple from POSIX threads**: (*Completed*) The calls to the underlying threads API (pthreads, whatever Windows uses, etc.)
    should be put behind an interface.
 7. **Add proper versioning**: (*Completed*) Add versioning information to the header AND compiled binary.

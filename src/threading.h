@@ -5,9 +5,7 @@
 
 #include <errno.h>
 
-#include "fiber.h"
-
-#if FIBER_USE_PTHREADS != 0
+#if defined(FIBER_THREADING_LIB_PTHREAD)
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -46,8 +44,8 @@ typedef sem_t fiber_semaphore;
 #define FIBER_THREAD_CANCEL_ASYNCHRONOUS (PTHREAD_CANCEL_ASYNCHRONOUS)
 
 #else
-#error "FIBER_USE_PTHREADS was disabled in fiber.h but there are no alternative typedefs and macros provided."
-#endif /* FIBER_USE_PTHREADS */
+#error "THREADING_LIB was not set to a valid value in config.mk"
+#endif /* FIBER_THREADING_LIB_PTHREAD */
 
 /** Semaphore functions **/
 

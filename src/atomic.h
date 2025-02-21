@@ -5,6 +5,8 @@
 
 #include "fiber.h"
 
+#if defined(FIBER_ATOMIC_OPERATIONS_IMPL_GCC) || \
+	defined(FIBER_ATOMIC_OPERATIONS_IMPL_CLANG)
 enum fiber_atomic_memorder {
 	FIBER_ATOMIC_RELAXED = __ATOMIC_RELAXED,
 	FIBER_ATOMIC_ACQUIRE = __ATOMIC_ACQUIRE,
@@ -12,6 +14,9 @@ enum fiber_atomic_memorder {
 	FIBER_ATOMIC_ACQ_REL = __ATOMIC_ACQ_REL,
 	FIBER_ATOMIC_SEQ_CST = __ATOMIC_SEQ_CST
 };
+#else
+#error "ATOMIC_OPERATIONS_IMPL was not set to a valid value in config.mk"
+#endif /* FIBER_ATOMIC_OPERATIONS_IMPL_GCC or FIBER_ATOMIC_OPERATIONS_IMPL_CLANG */
 
 /* The fetch_add and fetch_sub function return the previous value in at the pointer.
  * The add_fetch and sub_fetch return the result of the operation. The atomic 'and' and
@@ -52,7 +57,8 @@ jid atomic_load_jid(jid *j, enum fiber_atomic_memorder memorder);
  * compare exchange should be performed. Weak cmp exchanges can fail spuriously so only
  * use this if you are doing the cmp exchange in a retry loop.
  * @param success_memorder -> The memory order to use if the operation succeeds.
- * @param failure_memorder -> The memory order to use if the operation fails.
+ * @param failure_memorder -> The memory order to use if the operation fails. Specifically,
+ * the memory order of loading *j into expected on failure.
  * @returns -> A non zero value if the operation succeeds. 0 if the operation fails.
  */
 int atomic_compare_exchange_jid(jid *j, jid *expected, jid new, int weak,

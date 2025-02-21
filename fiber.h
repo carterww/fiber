@@ -7,20 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/** --- VERSION --- **/
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (4)
-#define FIBER_VERSION_PATCH (5)
+#define FIBER_VERSION_PATCH (6)
 
 struct fiber_version {
 	int major;
 	int minor;
 	int patch;
 };
-
-/** --- CONFIG --- **/
-
-/** Type Definitions **/
 
 /* These must be signed */
 typedef int tpsize; /* Threads in pool */
@@ -30,43 +25,6 @@ typedef long jid; /* Fiber job ID */
 #define FIBER_QSIZE_MAX (INT_MAX)
 #define FIBER_JID_MAX (LONG_MAX)
 #define FIBER_JID_MIN (LONG_MIN)
-
-/** Debugging Options **/
-
-/* If 0, runtime assertions will not be compiled. */
-#define FIBER_ASSERTS (1)
-
-/** Core Options **/
-
-/* Whether to use pthreads as the underlying threads library. Currently, this
- * is the only supported option. If this is 0, you must declare the necessary
- * macros and types in src/threading.h and implement the functions declared in
- * src/threading.h. See src/threading.h and src/threading_pthread.c on how
- * this can be done.
- * If you do implement src/threading.h's interface with a different threads
- * library, I'll gladly merge it.
- */
-#define FIBER_USE_PTHREADS (1)
-
-/* Whether to compile the FIFO queue into the binary. If this is not
- * enabled, functions declared in fiber_fifo.h will not be implemented
- * and should not be used.
- */
-#define FIBER_COMPILE_FIFO_QUEUE (1)
-
-/* If 0, fiber will not check if job ids overflow. This can be problematic if
- * the type jid is < 64 bits because a negative job id is invalid.
- */
-#define FIBER_CHECK_JID_OVERFLOW (1)
-/* Define overflow check if the max JID is < 64 bits. This is a safety thing.
- * Override at your own risk...
- */
-#if FIBER_JID_MAX < INT64_MAX && FIBER_CHECK_JID_OVERFLOW == 0
-#undef FIBER_CHECK_JID_OVERFLOW
-#define FIBER_CHECK_JID_OVERFLOW 1
-#endif
-
-/** --- END CONFIG --- **/
 
 /* Opaque fiber_pool struct. The definition is in src/fiber_internal.h */
 struct fiber_pool;
