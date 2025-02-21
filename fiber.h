@@ -10,7 +10,7 @@
 /** --- VERSION --- **/
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (4)
-#define FIBER_VERSION_PATCH (0)
+#define FIBER_VERSION_PATCH (1)
 
 struct fiber_version {
 	int major;
@@ -239,7 +239,7 @@ tpsize fiber_threads_working(struct fiber_pool *pool);
 struct fiber_version fiber_libversion(void);
 
 /* Ensures the version of Fiber is compatible with the header file's version.
- * @returns -> True if they are compatible, false if they are not.
+ * @returns -> True if they are compatible, false (0) if they are not.
  */
 static int fiber_libversion_compatible(void)
 {
@@ -253,18 +253,16 @@ static int fiber_libversion_compatible(void)
 		       libversion.minor == FIBER_VERSION_MINOR &&
 		       libversion.patch == FIBER_VERSION_PATCH;
 	}
-	/* If the header file is has a newer major version, it may contain more
-	 * features.
-         */
-	if (libversion.major < FIBER_VERSION_MAJOR) {
+	/* If the major versions are different there was likely breaking API changes. */
+	if (libversion.major != FIBER_VERSION_MAJOR) {
 		return 0;
 	}
-	if (libversion.major == FIBER_VERSION_MAJOR &&
-	    libversion.minor < FIBER_VERSION_MINOR) {
+	/* A newer header file may have more functions that were not built into the lib */
+	if (libversion.minor < FIBER_VERSION_MINOR) {
 		return 0;
 	}
-	/* At this point we know the major version is not 0 and either
-	 * 1. The library's major version is greater than the header file's.
+	/* At this point we know the following:
+         * 1. The library's major version is not 0.
 	 * 2. The library's major version is equal to the header file's and
 	 *    the library's minor version is greater than or equal to the header
 	 *    file's.
