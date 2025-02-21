@@ -11,14 +11,14 @@
 /* Represents a single thread in a fiber_pool */
 struct fiber_thread {
 	struct fiber_thread *next;
-	tid thread_id;
+	tid thread_id; /* Only LDR/STR this through atomic (RELAXED used right now) */
 	jid job_id;
 };
 
 /* A pool of threads and a job queue */
 struct fiber_pool {
 	fiber_mutex lock;
-	jid job_id_prev;
+	jid job_id_prev; /* Only LDR/STR this through atomic */
 	struct fiber_queue_operations *queue_ops;
 	void *job_queue;
 	struct fiber_thread *thread_head;

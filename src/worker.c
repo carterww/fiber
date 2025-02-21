@@ -209,8 +209,13 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 		int queue_pop_res;
 		int should_exit;
 
+                /* IMPORTANT: Nobody currently loads the thread's job_id and
+                 * the thread struct is private so no user should be able to.
+                 * Since we only store the job_id, RELAXED can be used. This may
+                 * be used in the future so it may need to be changed.
+                 */
 		atomic_store_jid(&thread->job_id, FBR_EINVLD_JOB,
-				 FIBER_ATOMIC_SEQ_CST);
+				 FIBER_ATOMIC_RELAXED);
 		queue_pop_res = pool->queue_ops->pop(
 			pool->job_queue, &job_buffer, FIBER_QUEUE_BLOCK);
 		fiber_assert(queue_pop_res == 0);
@@ -238,11 +243,14 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 	do {
 		uint32_t pool_flags;
 		atomic_store_jid(&thread->job_id, job->job_id,
-				 FIBER_ATOMIC_SEQ_CST);
+				 FIBER_ATOMIC_RELAXED);
 		job->job_func(job->job_arg);
 
 		pool_flags = atomic_load_uint32(&pool->pool_flags,
 						FIBER_ATOMIC_SEQ_CST);
+                /* This flag is high priority so we must check it before
+                 * popping a job. No other flags need to be checked.
+                 */
 		if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
 			break;
 		}
