@@ -159,7 +159,6 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		return FBR_ENULL_ARGS;
 	}
 	job->job_id = fiber_fetch_next_jid(&pool->job_id_prev);
-	fiber_assert(job->job_id > -1);
 	return __fiber_job_push(pool, job, queue_flags);
 }
 
@@ -192,15 +191,17 @@ void fiber_wait(struct fiber_pool *pool)
 		return;
 	}
 	(void)atomic_or_fetch_uint32(&pool->pool_flags, FIBER_POOL_FLAG_WAIT,
-				     FIBER_ATOMIC_SEQ_CST);
+				     FIBER_ATOMIC_ACQ_REL);
 	/* This sequence does not cause a race condition. If the number of
 	 * working threads is non zero AFTER we set the pool flags, we
 	 * know some thread will eventaully handle it. In the case where
-	 * working is 0. The queue was either just empty or is empty.
+	 * working is 0, there are two possibilities:
+         * 1. The queue is (or just was) empty and all threads are sleeping.
+         * 2. There are 0 threads in the pool.
          */
 	working = atomic_load_tpsize(&pool->threads_working,
-				     FIBER_ATOMIC_SEQ_CST);
-	length = fiber_jobs_pending(pool);
+				     FIBER_ATOMIC_ACQUIRE);
+	length = pool->queue_ops->length(pool->job_queue);
 	if (working > 0 || length > 0) {
 		while (fiber_sem_wait(&pool->threads_sync) != 0 &&
 		       errno == EINTR)
@@ -208,7 +209,7 @@ void fiber_wait(struct fiber_pool *pool)
 	}
 	off = ~FIBER_POOL_FLAG_WAIT;
 	(void)atomic_and_fetch_uint32(&pool->pool_flags, off,
-				      FIBER_ATOMIC_SEQ_CST);
+				      FIBER_ATOMIC_ACQ_REL);
 }
 
 qsize fiber_jobs_pending(struct fiber_pool *pool)
@@ -234,11 +235,11 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (pool->queue_ops == NULL || pool->queue_ops->push == NULL) {
 		return FBR_EPOOL_UNINIT;
 	}
-	/* Set flag & val to notify thread it should commit seppuku */
+        /* These cannot be reordered. */
 	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, threads_num,
-				      FIBER_ATOMIC_SEQ_CST);
+				      FIBER_ATOMIC_ACQ_REL);
 	(void)atomic_or_fetch_uint32(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
-				     FIBER_ATOMIC_SEQ_CST);
+				     FIBER_ATOMIC_ACQ_REL);
 	fiber_worker_wake_other(pool);
 	return 0;
 }
@@ -273,7 +274,7 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 	lock_res = fiber_mutex_unlock(&pool->lock);
 	fiber_assert(lock_res == 0);
 	(void)atomic_add_fetch_tpsize(&pool->threads_number, threads_num,
-				      FIBER_ATOMIC_SEQ_CST);
+				      FIBER_ATOMIC_ACQ_REL);
 	return 0;
 workers_start_err:
 	/* Failed to start workers. Need to cancel any that were started and free the
@@ -288,7 +289,7 @@ tpsize fiber_threads_number(struct fiber_pool *pool)
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	return atomic_load_tpsize(&pool->threads_number, FIBER_ATOMIC_SEQ_CST);
+	return atomic_load_tpsize(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
 }
 
 tpsize fiber_threads_working(struct fiber_pool *pool)
@@ -296,7 +297,7 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	return atomic_load_tpsize(&pool->threads_working, FIBER_ATOMIC_SEQ_CST);
+	return atomic_load_tpsize(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
 }
 
 jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,

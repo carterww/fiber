@@ -195,7 +195,7 @@ static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg)
 	fiber_assert(unlock_res == 0);
 
 	(void)atomic_fetch_sub_tpsize(&pool->threads_number, 1,
-				      FIBER_ATOMIC_SEQ_CST);
+				      FIBER_ATOMIC_ACQ_REL);
 
 	pool->free(arg);
 }
@@ -221,10 +221,10 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 		fiber_assert(queue_pop_res == 0);
 
 		(void)atomic_add_fetch_tpsize(&pool->threads_working, 1,
-					      FIBER_ATOMIC_SEQ_CST);
+					      FIBER_ATOMIC_ACQ_REL);
 		fiber_worker_execute_job(pool, thread, &job_buffer);
 		(void)atomic_sub_fetch_tpsize(&pool->threads_working, 1,
-					      FIBER_ATOMIC_SEQ_CST);
+					      FIBER_ATOMIC_ACQ_REL);
 
 		/* Before calling pop and possibly falling asleep, handle any flags
                  * from pool.
@@ -246,8 +246,13 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 				 FIBER_ATOMIC_RELAXED);
 		job->job_func(job->job_arg);
 
+                /* Speed is important here. I am prioritizing speed over getting the
+                 * most recent value 100% of the time by using RELAXED. This will be
+                 * checked later (once there are no jobs on the queue) with the stronger
+                 * memory ordering.
+                 */
 		pool_flags = atomic_load_uint32(&pool->pool_flags,
-						FIBER_ATOMIC_SEQ_CST);
+						FIBER_ATOMIC_RELAXED);
                 /* This flag is high priority so we must check it before
                  * popping a job. No other flags need to be checked.
                  */
@@ -261,7 +266,7 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 static int fiber_worker_handle_flags(struct fiber_pool *pool)
 {
 	uint32_t pool_flags =
-		atomic_load_uint32(&pool->pool_flags, FIBER_ATOMIC_SEQ_CST);
+		atomic_load_uint32(&pool->pool_flags, FIBER_ATOMIC_ACQUIRE);
 	if (pool_flags & FIBER_POOL_FLAG_KILL_N) {
 		int should_exit = fiber_worker_handle_flag_kill(pool);
 		if (should_exit) {
@@ -278,12 +283,12 @@ static int fiber_worker_handle_flag_kill(struct fiber_pool *pool)
 {
 	/* to_kill is the result after the subtraction */
 	tpsize to_kill = atomic_sub_fetch_tpsize(&pool->threads_kill_number, 1,
-						 FIBER_ATOMIC_SEQ_CST);
+						 FIBER_ATOMIC_ACQ_REL);
 	if (to_kill <= 0) {
 		/* Disable the kill flag */
 		uint32_t off = ~FIBER_POOL_FLAG_KILL_N;
 		(void)atomic_and_fetch_uint32(&pool->pool_flags, off,
-					      FIBER_ATOMIC_SEQ_CST);
+					      FIBER_ATOMIC_ACQ_REL);
 
 	} else {
 		/* Wake another thread so they can end exit */
@@ -295,11 +300,10 @@ static int fiber_worker_handle_flag_kill(struct fiber_pool *pool)
 	}
 
 	/* If to_kill is negative it means we tried to kill more threads than
-         * we needed. This is ok. We just need to add one back to the threads_kill_number
-         * and check other flags.
+         * we needed. This is ok. We just need to add one back to the threads_kill_number.
          */
 	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, 1,
-				      FIBER_ATOMIC_SEQ_CST);
+				      FIBER_ATOMIC_ACQ_REL);
 	return 0;
 }
 
@@ -309,7 +313,7 @@ static void fiber_worker_handle_flag_wait(struct fiber_pool *pool)
 	tpsize threads_working;
 
 	threads_working = atomic_load_tpsize(&pool->threads_working,
-					     FIBER_ATOMIC_SEQ_CST);
+					     FIBER_ATOMIC_ACQUIRE);
 	/* If there are more threads working, do not post to the sync sem */
 	if (threads_working > 0) {
 		return;

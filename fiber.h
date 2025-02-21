@@ -10,7 +10,7 @@
 /** --- VERSION --- **/
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (4)
-#define FIBER_VERSION_PATCH (4)
+#define FIBER_VERSION_PATCH (5)
 
 struct fiber_version {
 	int major;
