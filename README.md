@@ -28,9 +28,10 @@ your own job queue for fiber, please read the [requirements](src/queue/README.md
 6. **Decouple from POSIX threads**: (*Completed*) The calls to the underlying threads API (pthreads, whatever Windows uses, etc.)
    should be put behind an interface.
 7. **Add proper versioning**: (*Completed*) Add versioning information to the header AND compiled binary.
-8. **Add the compile time configuration to binary**: Users could test if some options were enabled. This
+8. **Add the compile time configuration to binary**: (*Completed*) Users could test if some options were enabled. This
    is helpful if users are using a prebuilt binary instead of compiling from source.
-9. **Upgrade the build system**: I'm not sure what I'll do yet but I feel like the current system is bad.
+9. **Upgrade the build system**: (*Completed* I stuck with Make but made the build system more flexible) I'm not sure
+   what I'll do yet but I feel like the current system is bad.
 10. **Change the testing system**: Similar to (9).
 11. **Add more test cases**: Can never have too many.
 12. **Test with Thread Sanitizer**: Clang library used for detecting race conditions.

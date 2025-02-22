@@ -36,6 +36,15 @@ int main(void)
 {
 	int i = 0;
 	struct fiber_pool *pool = NULL;
+        int fifo_queue_capable = 0;
+        
+        /* Make sure the fifo queue is supported before using it */
+        fifo_queue_capable = fiber_capability_get(FIBER_CAPABILITY_FIBER_FIFO_QUEUE);
+        if (!fifo_queue_capable) {
+                printf("Fiber does not support the fifo queue...\n");
+                exit(1);
+        }
+
 	{
 		struct fiber_queue_operations queue_ops =
 			FIBER_FIFO_QUEUE_OPERATIONS;

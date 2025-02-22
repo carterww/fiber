@@ -15,14 +15,14 @@ C_CONFIG_FLAGS = -D"FIBER_COMPILE_ASSERTS=($(COMPILE_ASSERTS))" \
 		 -D"FIBER_COMPILE_CHECK_JID_OVERFLOW=($(COMPILE_CHECK_JID_OVERFLOW))" \
 		 -D"FIBER_COMPILE_FIBER_FIFO_QUEUE=($(COMPILE_FIBER_FIFO_QUEUE))"
 
-OBJ = fiber.o thread_list.o version.o worker.o
+OBJ = fiber.o thread_list.o version.o worker.o capability.o
 
 ifeq ($(ENV),norm)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_NORM"
 else ifeq ($(ENV),debug)
-	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG"
+	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG" -g
 else ifeq ($(ENV),test)
-	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST"
+	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST" -g
 else
 	$(error ENV was invalid.)
 endif

@@ -8,8 +8,8 @@
 #include <stdint.h>
 
 #define FIBER_VERSION_MAJOR (0)
-#define FIBER_VERSION_MINOR (4)
-#define FIBER_VERSION_PATCH (6)
+#define FIBER_VERSION_MINOR (5)
+#define FIBER_VERSION_PATCH (0)
 
 struct fiber_version {
 	int major;
@@ -83,6 +83,24 @@ struct fiber_pool_init_options {
 struct fiber_init_result {
 	int error;
 	struct fiber_pool *pool;
+};
+
+/* Options that can be passed to fiber_capability_get to see if support for
+ * the option was compiled into the binary.
+ */
+enum fiber_capability_option {
+        FIBER_CAPABILITY_ASSERTS = 0,
+        FIBER_CAPABILITY_CHECK_JID_OVERFLOW = 1,
+        FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 2,
+        FIBER_CAPABILITY_BUILD_ENV_NORM = 3,
+        FIBER_CAPABILITY_BUILD_ENV_DEBUG = 4,
+        FIBER_CAPABILITY_BUILD_ENV_TEST = 5,
+        FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 6,
+        FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 7,
+        FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 8,
+
+        /* This should always be the last one */
+        FIBER_CAPABILITY_ENUM_END
 };
 
 /* Responsible for initializing all resources needed for the thread pool and
@@ -209,6 +227,12 @@ tpsize fiber_threads_working(struct fiber_pool *pool);
  * numbers.
  */
 struct fiber_version fiber_libversion(void);
+
+/* Tests if the capability option opt is supported by the Fiber lib.
+ * @param opt -> The option to test for.
+ * @returns -> 0 if the capability is not supported, non-zero otherwise.
+ */
+int fiber_capability_get(enum fiber_capability_option opt);
 
 /* Ensures the version of Fiber is compatible with the header file's version.
  * @returns -> True if they are compatible, false (0) if they are not.
