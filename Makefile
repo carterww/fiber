@@ -27,6 +27,10 @@ example: lib build/example.o
 build/threading_pthread.o: src/threading_pthread.c
 	$(CC) $(C_FLAGS) -pthread -c $< -o $@
 
+# This code is external and has warnings so I will not use those flags here
+build/test/unity.o: test/unity.c
+	$(CC) -I. -O2 -std=c89 -c $< -o $@
+
 build/queue/%.o: C_FLAGS+=$(C_PEDANTIC_FLAGS)
 build/queue/%.o: src/queue/%.c
 	$(CC) $(C_FLAGS) -c $< -o $@
@@ -38,10 +42,6 @@ build/%.o: src/%.c
 build/test/api/%.o: C_FLAGS+=$(C_PEDANTIC_FLAGS)
 build/test/api/%.o: test/api/%.c
 	$(CC) $(C_FLAGS) -c $< -o $@
-
-# This code is external and has warnings so I will not use those flags here
-build/test/unity.o: test/unity.c
-	$(CC) -I. -O2 -std=c89 -c $< -o $@
 
 bin:
 	@mkdir $@
@@ -71,19 +71,36 @@ clean:
 	rm -rf build bin
 
 clean_tests:
-	rm $(TEST_BUILD_DIR)/**/*.test
+	rm -f $(TEST_BUILD_DIR)/**/*.test
 
 clean_test_api_%:
-	rm -f $(TEST_API_BUILD_DIR)/$*.test
+	@rm -f $(TEST_API_BUILD_DIR)/$*.test
 
 test_summary:
 	@python3 test/unity_test_summary.py ./build/test/
 
-test_api_fiber_capability_get: clean_test_api_test_api_fiber_capability_get $(BIN_DIR_TARGETS) \
-	$(BUILD_DIR_TARGETS) $(TEST_API_FIBER_CAPABILITY_GET_DEPS)
+# Test groups
+test_api: clean_tests $(TEST_API_CAPABILITY) $(TEST_API_LIBVERSION_COMPAT) test_summary
 
-	$(CC) $(C_FLAGS) -o $(TEST_API_BIN_DIR)/$@ $(TEST_API_FIBER_CAPABILITY_GET_DEPS)
+# Test API runners
+$(TEST_API_CAPABILITY): clean_$(TEST_API_CAPABILITY) $(BIN_DIR_TARGETS) $(BUILD_DIR_TARGETS) \
+	$(TEST_API_BIN_DIR)/$(TEST_API_CAPABILITY)
+
 	@printf "\n"
 	@$(TEST_API_BIN_DIR)/$@ | tee $(TEST_API_BUILD_DIR)/$@.test
 
-.PHONY: all lib lib_so example clean clean_tests clean_test_api_% test_api_fiber_capability_get
+$(TEST_API_LIBVERSION_COMPAT): clean_$(TEST_API_LIBVERSION_COMPAT) $(BIN_DIR_TARGETS) $(BUILD_DIR_TARGETS) \
+	$(TEST_API_BIN_DIR)/$(TEST_API_LIBVERSION_COMPAT)
+
+	@printf "\n"
+	@$(TEST_API_BIN_DIR)/$@ | tee $(TEST_API_BUILD_DIR)/$@.test
+	
+# Test API builders
+$(TEST_API_BIN_DIR)/$(TEST_API_LIBVERSION_COMPAT): $(TEST_API_FIBER_LIBVERSION_COMPATIBLE_DEPS)
+	@$(CC) $(C_FLAGS) -o $@ $^
+
+$(TEST_API_BIN_DIR)/$(TEST_API_CAPABILITY): $(TEST_API_FIBER_CAPABILITY_GET_DEPS)
+	$(CC) $(C_FLAGS) -o $@ $^
+
+.PHONY: all lib lib_so example clean clean_tests clean_test_api_% $(TEST_API_CAPABILITY) \
+	$(TEST_API_LIBVERSION_COMPAT)

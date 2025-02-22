@@ -9,3 +9,4 @@ perf.*
 *.a
 *.so
 fiber.h.bak
+version.plist

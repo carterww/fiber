@@ -7,9 +7,15 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/* Some test suites redefine these before including fiber.h to test
+ * with different header versions. This is a simple but scuffed way
+ * to avoid redefining them.
+ */
+#if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (5)
 #define FIBER_VERSION_PATCH (0)
+#endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
 	int major;
