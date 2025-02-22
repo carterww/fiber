@@ -20,7 +20,12 @@
 /* Only provide declarations if the ENV is test. No production code should need
  * anything from this header.
  */
-/*#if defined(FIBER_BUILD_ENV_TEST) */
+#if defined(FIBER_BUILD_ENV_TEST)
+
+struct fiber_test_internal_capability {
+	uint8_t *capability_bitstring;
+	size_t capability_bitstring_size;
+};
 
 struct fiber_test_internal_fiber {
 	/* This one isn't static but it isn't in a header file */
@@ -74,14 +79,15 @@ struct fiber_test_internal_worker {
 	void *(*fiber_wake_runner)(void *arg);
 };
 
+extern struct fiber_test_internal_capability fiber_test_internal_capability;
 extern struct fiber_test_internal_fiber fiber_test_internal_fiber;
 extern struct fiber_test_internal_queue_fifo fiber_test_internal_queue_fifo;
 #if defined(FIBER_THREADING_LIB_PTHREAD)
-extern struct fiber_test_internal_threading_pthread fiber_test_internal_threading_pthread;
+extern struct fiber_test_internal_threading_pthread
+	fiber_test_internal_threading_pthread;
 #endif /* FIBER_THREADING_LIB_PTHREAD */
 extern struct fiber_test_internal_version fiber_test_internal_version;
 extern struct fiber_test_internal_worker fiber_test_internal_worker;
 
-/* #endif */
-
+#endif /* FIBER_BUILD_ENV_TEST */
 #endif /* _FIBER_TEST_INTERNAL_H */

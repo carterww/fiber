@@ -99,3 +99,11 @@ int fiber_capability_get(enum fiber_capability_option opt)
 #undef FIBER_ATOMIC_OPERATIONS_IMPL_GCC_EXISTS
 #undef FIBER_ATOMIC_OPERATIONS_IMPL_CLANG_EXISTS
 #undef CAPABILITY_BIT
+
+#if defined(FIBER_BUILD_ENV_TEST)
+#include "test_internal.h"
+struct fiber_test_internal_capability fiber_test_internal_capability = {
+        capability_bitstring,
+        sizeof(capability_bitstring)
+};
+#endif /* FIBER_BUILD_ENV_TEST */

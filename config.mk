@@ -1,6 +1,11 @@
 # Boring options
 CC = cc
 TARGET = fiber
+# This can be one of the following:
+# norm: Default build that should be used for production.
+# debug: Debug build that has symbols built in.
+# test: Special build that builds some code only used when testing.
+ENV=norm
 
 # Compile time options that the user can configure. For now, there are two types:
 # booleans: These should be represented as 0 or 1
