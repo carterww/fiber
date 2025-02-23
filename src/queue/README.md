@@ -42,7 +42,41 @@ requirements are met, your queue should seamlessly integrate into Fiber.
   store a reference to the job argument in any way.
 
 ## Adding your Queue
+In order to completely integrate your queue, you must add it to the build system and
+optionally add it as a capability. Adding it as a capability will allow your application(s)
+to ensure Fiber was compiled with your queue (this is only recommended if Fiber is being
+used as a shared object file).
+
+### Build System
 In order to add your queue to the build follow these steps:
-1. Define a boolean flag in fiber.h in the form "#define FIBER_COMPILE_\[QUEUE_NAME\]_QUEUE (1)"
-2. Add a guard around the #include of the C file in src/fiber.c (see how the fifo is done).
-3. Add your flag to the check that raises a compile time error if no queue implementation is defined.
+1. Add a new boolean option to config.mk with the name COMPILE_FIBER_\[QUEUE_NAME\]_QUEUE.
+2. Add an "ifeq" check in common.mk that adds queue/\[QUEUE_NAME\].o to QUEUE_OBJS if the
+   option defined in config.mk is true.
+
+The steps above will ensure your queue is compiled into Fiber's final binary, but it will
+not add the queue as a capability.
+
+### Capability
+Fiber provides a function, *fiber_capability_get*, that allows applications to check if
+Fiber supports a feature at runtime. Usually these features are optionally compiled into
+Fiber (like your queue), so it is helpful to check for support if your application relies
+on one of these features.
+
+Follow these steps to to add your queue as a capability:
+1. Add a new definition to C_CONFIG_FLAGS in common.mk. It should take the following form:
+   -D"FIBER_COMPILE_FIBER_\[QUEUE_NAME\]_QUEUE=($(COMPILE_FIBER_\[QUEUE_NAME\]_QUEUE))".
+2. Locate the enum *fiber_capability_option* in fiber.h and add a new member just before
+   FIBER_CAPABILITY_ENUM_END named FIBER_CAPABILITY_FIBER_\[QUEUE_NAME\]_QUEUE. You should
+   also set the value to the previous value + 1. This isn't required but being explicit
+   helps with the future steps.
+3. Go to src/capability.c and locate the *capability_bitstring* array. This array stores
+   each capability option as a bit.
+4. Locate the array element which corresponds to the value you just set. There should be a
+   comment above each element like "0-7 fiber_capability_option values." If there is not an
+   element for your option, add one.
+5. Bitwise OR the following to the other values: "CAPABILITY_BIT(FIBER_COMPILE_FIBER_\[QUEUE_NAME\]_QUEUE,
+   FIBER_CAPABILITY_FIBER_\[QUEUE_NAME\]_QUEUE)"
+
+## Further Information
+If you are trying to add your own queue to Fiber and have any questions or need help, please
+submit an issue on GitHub. You can also shoot me an email at carterww@hotmail.com.
