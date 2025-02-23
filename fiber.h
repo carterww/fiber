@@ -14,7 +14,7 @@
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (6)
-#define FIBER_VERSION_PATCH (0)
+#define FIBER_VERSION_PATCH (1)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -67,13 +67,10 @@ typedef qsize (*fiber_queue_length_function_t)(void *queue);
  * src/queue.
  */
 struct fiber_queue_operations {
-	/* These four functions are required */
 	fiber_queue_push_function_t push;
 	fiber_queue_pop_function_t pop;
 	fiber_queue_init_function_t init;
 	fiber_queue_free_function_t free;
-
-	/* Optional */
 	fiber_queue_length_function_t length;
 };
 

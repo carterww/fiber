@@ -33,15 +33,9 @@ struct fiber_pool {
 	tpsize threads_working; /* Only LDR/STR this through atomic */
 	fiber_semaphore threads_sync;
 	tpsize threads_kill_number; /* Only LDR/STR this through atomic */
-	uint32_t pool_flags; /* Only LDR/STR this through atomic */
+	tpsize fiber_wait_callers; /* Only LDR/STR this through atomic */
 	malloc_function_t malloc;
 	free_function_t free;
 };
-
-/** Flags **/
-
-/* Signal flags */
-#define FIBER_POOL_FLAG_WAIT (1 << 0)
-#define FIBER_POOL_FLAG_KILL_N (1 << 1)
 
 #endif /* _FIBER_INTERNAL_H */

@@ -5,6 +5,7 @@
 
 #include <stdint.h>
 
+#include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
 #include "threading.h"
@@ -73,6 +74,10 @@ struct fiber_test_internal_worker {
 					 struct fiber_thread *thread,
 					 struct fiber_job *job);
 	int (*fiber_worker_handle_flags)(struct fiber_pool *pool);
+	int (*fiber_worker_should_handle_flag_kill)(struct fiber_pool *pool,
+						    enum fiber_atomic_memorder load_memorder);
+	int (*fiber_worker_should_handle_flag_wait)(struct fiber_pool *pool,
+						    enum fiber_atomic_memorder load_memorder);
 	int (*fiber_worker_handle_flag_kill)(struct fiber_pool *pool);
 	void (*fiber_worker_handle_flag_wait)(struct fiber_pool *pool);
 

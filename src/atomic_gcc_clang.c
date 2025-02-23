@@ -62,22 +62,3 @@ int atomic_compare_exchange_jid(jid *j, jid *expected, jid new, int weak,
 	return __atomic_compare_exchange_n(j, expected, new, weak,
 					   success_memorder, failure_memorder);
 }
-
-/** uint32_t atomic ops **/
-
-uint32_t atomic_load_uint32(uint32_t *u, enum fiber_atomic_memorder memorder)
-{
-	return __atomic_load_n(u, memorder);
-}
-
-uint32_t atomic_and_fetch_uint32(uint32_t *u, uint32_t val,
-				 enum fiber_atomic_memorder memorder)
-{
-	return __atomic_and_fetch(u, val, memorder);
-}
-
-uint32_t atomic_or_fetch_uint32(uint32_t *u, uint32_t val,
-				enum fiber_atomic_memorder memorder)
-{
-	return __atomic_or_fetch(u, val, memorder);
-}

@@ -86,15 +86,4 @@ jid atomic_load_jid(jid *j, enum fiber_atomic_memorder memorder);
 int atomic_compare_exchange_jid(jid *j, jid *expected, jid new, int weak,
 				enum fiber_atomic_memorder success_memorder,
 				enum fiber_atomic_memorder failure_memorder);
-
-/** uint32_t atomic ops **/
-
-uint32_t atomic_load_uint32(uint32_t *u, enum fiber_atomic_memorder memorder);
-
-uint32_t atomic_and_fetch_uint32(uint32_t *u, uint32_t val,
-				 enum fiber_atomic_memorder memorder);
-
-uint32_t atomic_or_fetch_uint32(uint32_t *u, uint32_t val,
-				enum fiber_atomic_memorder memorder);
-
 #endif /* _FIBER_ATOMIC_H */

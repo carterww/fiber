@@ -41,7 +41,7 @@ static void validate_pool(struct fiber_pool *pool,
 	TEST_ASSERT_EQUAL(opts->threads_number, pool->threads_number);
 	TEST_ASSERT_EQUAL(0, pool->threads_working);
 	TEST_ASSERT_EQUAL(0, pool->threads_kill_number);
-	TEST_ASSERT_EQUAL(0, pool->pool_flags);
+	TEST_ASSERT_EQUAL(0, pool->fiber_wait_callers);
 	TEST_ASSERT_EQUAL(opts->malloc, pool->malloc);
 	TEST_ASSERT_EQUAL(opts->free, pool->free);
 
