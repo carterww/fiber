@@ -14,7 +14,7 @@
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (5)
-#define FIBER_VERSION_PATCH (0)
+#define FIBER_VERSION_PATCH (1)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {

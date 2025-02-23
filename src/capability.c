@@ -8,7 +8,7 @@
 /* This file is very messy and macro heavy... I'm sorry */
 
 #define CAPABILITY_BIT(bool, shift) \
-        (((bool) ? 1 : 0) << (shift))
+        (((bool) ? 1 : 0) << (shift % 8))
 
 /* These macros are just defined, not 0 or 1. Make a new macro that is 0 or 1 */
 
