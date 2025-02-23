@@ -1,6 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include <errno.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +7,6 @@
 #include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
-#include "threading.h"
 #include "thread_list.h"
 #include "utils.h"
 #include "worker.h"
@@ -135,6 +133,7 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 void fiber_free(struct fiber_pool *pool)
 {
 	int des_res = 1;
+
 	if (pool == NULL || pool->free == NULL) {
 		return;
 	}
@@ -173,8 +172,8 @@ void fiber_wait(struct fiber_pool *pool)
 				     FIBER_ATOMIC_ACQUIRE);
 	length = pool->queue_ops->length(pool->job_queue);
 	if (working > 0 || length > 0) {
-		while (fiber_sem_wait(&pool->threads_sync) != 0 &&
-		       errno == EINTR)
+		while (fiber_sem_wait(&pool->threads_sync) ==
+		       FBR_ETHREADING_EINTR)
 			;
 	}
 	off = ~FIBER_POOL_FLAG_WAIT;
@@ -290,7 +289,10 @@ fiber_validate_init_options(const struct fiber_pool_init_options *opts)
 	if (opts == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	if (opts->threads_number < 1 || opts->queue_length < 1) {
+	if (opts->threads_number < FIBER_THREADS_NUMBER_MIN ||
+	    opts->threads_number > FIBER_THREADS_NUMBER_MAX ||
+	    opts->queue_length < FIBER_QUEUE_LENGTH_MIN ||
+	    opts->queue_length > FIBER_QUEUE_LENGTH_MAX) {
 		return FBR_EINVLD_SIZE;
 	}
 	if (opts->queue_ops == NULL) {
@@ -405,7 +407,7 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 static void fiber_thread_pool_end_threads(const struct fiber_pool *pool,
 					  struct fiber_thread *thread_head)
 {
-	if (thread_head) {
+	if (thread_head != NULL) {
 		fiber_assert(pool->free != NULL);
 		fiber_workers_cancel(thread_head, FIBER_TPSIZE_MAX);
 	}

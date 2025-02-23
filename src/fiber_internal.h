@@ -8,6 +8,13 @@
 #include "fiber.h"
 #include "threading.h"
 
+/* Internal limits */
+#define FIBER_QUEUE_LENGTH_MIN (1)
+#define FIBER_QUEUE_LENGTH_MAX (FIBER_QSIZE_MAX)
+
+#define FIBER_THREADS_NUMBER_MIN (1)
+#define FIBER_THREADS_NUMBER_MAX (FIBER_TPSIZE_MAX)
+
 /* Represents a single thread in a fiber_pool */
 struct fiber_thread {
 	struct fiber_thread *next;
@@ -27,8 +34,8 @@ struct fiber_pool {
 	fiber_semaphore threads_sync;
 	tpsize threads_kill_number; /* Only LDR/STR this through atomic */
 	uint32_t pool_flags; /* Only LDR/STR this through atomic */
-        malloc_function_t malloc;
-        free_function_t free;
+	malloc_function_t malloc;
+	free_function_t free;
 };
 
 /** Flags **/

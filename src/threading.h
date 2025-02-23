@@ -3,6 +3,7 @@
 #ifndef _FIBER_THREADING_H
 #define _FIBER_THREADING_H
 
+#include "fiber.h"
 #include <errno.h>
 
 #if defined(FIBER_THREADING_LIB_PTHREAD)
@@ -161,7 +162,7 @@ int fiber_mutex_unlock(fiber_mutex *mut);
  * @error FBR_ETHRD_LIMIT -> A new thread could not be created because the limit was reached.
  * This limit could be from a system policy, insufficient resources, etc.
  */
-int fiber_thread_create(tid *thread_id, void *(*runner)(void *), void *arg);
+int fiber_thread_create(tid *thread_id, fiber_job_function_t runner, void *arg);
 
 /* Exits a thread. This function should only be called within a thread created by
  * fiber_thread_create. Attempting to exit from a process/thread not created with

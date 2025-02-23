@@ -247,7 +247,7 @@ static int __fiber_thread_setcancelstate(int state)
 	}
 }
 
-int fiber_thread_create(tid *thread_id, void *(*runner)(void *), void *arg)
+int fiber_thread_create(tid *thread_id, fiber_job_function_t runner, void *arg)
 {
 	int res;
 
