@@ -148,6 +148,8 @@ struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts);
  * @returns: 0 on success, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool, job, or job_func are NULL.
  * @error FBR_EPUSH_JOB -> The queue implementation's push function
+ * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
+ * in queue_flags.
  * returned an error.
  */
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
@@ -287,6 +289,8 @@ static int fiber_libversion_compatible(void)
 #define FBR_ETHRD_LIMIT (-11)
 #define FBR_ENO_ALLOC (-12)
 #define FBR_ENOMEM (-13)
+#define FBR_EAGAIN (-14)
+#define FBR_EINTR (-15)
 
 /** Flags **/
 

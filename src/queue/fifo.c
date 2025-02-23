@@ -93,7 +93,7 @@ static void fiber_queue_sem_wait(fiber_semaphore *sem)
 	int wait_res;
 	do {
 		wait_res = fiber_sem_wait(sem);
-	} while (wait_res == FBR_ETHREADING_EINTR);
+	} while (wait_res == FBR_EINTR);
 	/* Make sure we didn't exit loop from error */
 	fiber_assert(wait_res == 0);
 }
@@ -103,8 +103,8 @@ static int fiber_queue_sem_trywait(fiber_semaphore *sem)
 	int try_res;
 	do {
 		try_res = fiber_sem_trywait(sem);
-	} while (try_res == FBR_ETHREADING_EINTR);
-	if (try_res == FBR_ETHREADING_EAGAIN) {
+	} while (try_res == FBR_EINTR);
+	if (try_res == FBR_EAGAIN) {
 		return 0;
 	}
 	fiber_assert(try_res == 0);
@@ -143,7 +143,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	} else {
 		int sem_waited_success = fiber_queue_sem_trywait(&fq->void_num);
 		if (!sem_waited_success) {
-			return FBR_ETHREADING_EAGAIN;
+			return FBR_EAGAIN;
 		}
 	}
 
@@ -172,7 +172,7 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
 	} else {
 		int sem_waited_success = fiber_queue_sem_trywait(&fq->jobs_num);
 		if (!sem_waited_success) {
-			return FBR_ETHREADING_EAGAIN;
+			return FBR_EAGAIN;
 		}
 	}
 

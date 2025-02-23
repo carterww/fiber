@@ -69,7 +69,7 @@ int fiber_sem_wait(fiber_semaphore *sem)
 
 	switch (errno) {
 	case EINTR: /* Call interrupted by signal */
-		return FBR_ETHREADING_EINTR;
+		return FBR_EINTR;
 	default:
 		panic(1);
 	}
@@ -90,9 +90,9 @@ int fiber_sem_trywait(fiber_semaphore *sem)
 
 	switch (errno) {
 	case EINTR: /* Call interrupted by signal */
-		return FBR_ETHREADING_EINTR;
+		return FBR_EINTR;
 	case EAGAIN: /* Could not wait on semaphore without blocking */
-		return FBR_ETHREADING_EAGAIN;
+		return FBR_EAGAIN;
 	default:
 		panic(1);
 	}

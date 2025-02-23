@@ -33,7 +33,7 @@ requirements are met, your queue should seamlessly integrate into Fiber.
    - For *pop*, this means it should block until a job is available to pop off.
       - Blocking on *pop* is especially useful because it allows the thread to sleep
         until a job is ready (if blocking = sleeping).
-- *push* and *pop* should return FBR_ETHREADING_EAGAIN if the block flag is not set
+- *push* and *pop* should return FBR_EAGAIN if the block flag is not set
   and the operation cannot be completed immediately.
 - If the function returns an int, a 0 value should be returned to indicate a success
   and a non-zero should be returned to indicate an error. An error value defined in

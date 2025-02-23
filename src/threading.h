@@ -4,7 +4,6 @@
 #define _FIBER_THREADING_H
 
 #include "fiber.h"
-#include <errno.h>
 
 #if defined(FIBER_THREADING_LIB_PTHREAD)
 
@@ -73,7 +72,7 @@ int fiber_sem_destroy(fiber_semaphore *sem);
  * the function blocks until other thread(s) call fiber_sem_post.
  * @param sem -> Pointer to the fiber_semaphore to wait on.
  * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_ETHREADING_EINTR -> An internal fiber error code that indicates the call was interrupted
+ * @error FBR_EINTR -> An internal fiber error code that indicates the call was interrupted
  * by something (most likely a signal handler). The caller should retry if this is returned.
  */
 int fiber_sem_wait(fiber_semaphore *sem);
@@ -83,9 +82,9 @@ int fiber_sem_wait(fiber_semaphore *sem);
  * the semaphore is <= 0, the function returns immediately with an error code.
  * @param sem -> Pointer to the fiber_semaphore to wait on.
  * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_ETHREADING_EINTR -> An internal fiber error code that indicates the call was interrupted
+ * @error FBR_EINTR -> An internal fiber error code that indicates the call was interrupted
  * by something (most likely a signal handler). The caller should retry if this is returned.
- * @error FBR_ETHREADING_EAGAIN -> An internal fiber error code that indicates the value of the semaphore
+ * @error FBR_EAGAIN -> An internal fiber error code that indicates the value of the semaphore
  * was <= 0 and could not be acquired.
  */
 int fiber_sem_trywait(fiber_semaphore *sem);
@@ -236,10 +235,5 @@ int fiber_thread_cancel_type_set(int cancel_type);
  * indicate a bug so we panic.
  */
 int fiber_thread_cancel(const tid *thread_id);
-
-/** Error codes **/
-
-#define FBR_ETHREADING_EINTR (-1 * EINTR)
-#define FBR_ETHREADING_EAGAIN (-1 * EAGAIN)
 
 #endif /* _FIBER_THREADING_H */

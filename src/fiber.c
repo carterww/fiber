@@ -18,7 +18,9 @@
  * @param job -> The job to push. It should already have the members set.
  * @param queue_flags -> Flags to pass to the job queue's push function.
  * @returns -> Either a valid job id (0 or more) or an error.
- * @error FBR_EPUSH_JOB -> The job queue's push function returned a non zero value.
+ * @error FBR_EPUSH_JOB -> A generic error returned by the queue push function.
+ * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
+ * in queue_flags.
  * @note worker.c uses this to push jobs with preset job ids
  */
 jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
@@ -173,15 +175,14 @@ int fiber_wait(struct fiber_pool *pool)
 	threads_number = atomic_load_tpsize(&pool->threads_working,
 					    FIBER_ATOMIC_ACQUIRE);
 
-        /* There is a case where threads_number goes to zero after loading its
+	/* There is a case where threads_number goes to zero after loading its
          * value and queue_length is > 0. This will result in a deadlock. In this
          * case, the last thread in the pool with post to the sem prior to cleaning
          * up.
          */
 	if (threads_number > 0) {
 		if (threads_working > 0 || queue_length > 0) {
-			while (fiber_sem_wait(&pool->threads_sync) ==
-			       FBR_ETHREADING_EINTR)
+			while (fiber_sem_wait(&pool->threads_sync) == FBR_EINTR)
 				;
 		}
 	}
@@ -288,9 +289,15 @@ jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 
 	fiber_assert(pool->queue_ops != NULL && pool->queue_ops->push != NULL);
 	push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
-	/* Don't allow positive error codes to return */
-	if (push_res != 0) {
-		return FBR_EPUSH_JOB;
+	switch (push_res) {
+        case 0:
+                break;
+	case FBR_EPUSH_JOB:
+	case FBR_EAGAIN:
+		fiber_assert(push_res < 0);
+		return push_res;
+	default:
+		panic(1);
 	}
 	return job->job_id;
 }

@@ -164,8 +164,19 @@ void fiber_worker_wake_other(struct fiber_pool *pool)
 	/* Put a job onto the queue whose sole purpose is to wake up
 	 * a thread and allow it to handle the flags we just set.
          */
-	res = __fiber_job_push(pool, &wake_job, FIBER_QUEUE_BLOCK);
-	fiber_assert(res == 0);
+	res = __fiber_job_push(pool, &wake_job, FIBER_QUEUE_NO_BLOCK);
+	switch (res) {
+	case 0:
+		break;
+	/* Queue was full. If this is the case, another worker will evetually
+         * wake up anyway.
+         */
+	case FBR_EAGAIN:
+		break;
+	case FBR_EPUSH_JOB:
+	default:
+		panic(1);
+	}
 }
 
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg)

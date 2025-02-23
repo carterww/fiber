@@ -36,7 +36,7 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
  *   - FIBER_QUEUE_BLOCK: Indiciates the function should block until there is room
  *     on the queue.
  * @returns 0 on success, an error otherwise.
- * @error FBR_ETHREADING_EAGAIN -> There is no room on the queue and FIBER_QUEUE_BLOCK
+ * @error FBR_EAGAIN -> There is no room on the queue and FIBER_QUEUE_BLOCK
  * was not set.
  */
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
@@ -50,7 +50,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
  *   - FIBER_QUEUE_BLOCK: Indiciates the function should block until a job is
  *     available to pop.
  * @returns 0 on success, an error otherwise.
- * @error FBR_ETHREADING_EAGAIN -> There is no job to pop from the queue and FIBER_QUEUE_BLOCK
+ * @error FBR_EAGAIN -> There is no job to pop from the queue and FIBER_QUEUE_BLOCK
  * was not set.
  */
 int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags);

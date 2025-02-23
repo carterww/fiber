@@ -35,8 +35,9 @@ void *runner(void *arg)
 int main(void)
 {
 	int i = 0;
-	struct fiber_pool *pool = NULL;
         int fifo_queue_capable = 0;
+        int error = 0;
+	struct fiber_pool *pool = NULL;
         
         /* Make sure the fifo queue is supported before using it */
         fifo_queue_capable = fiber_capability_get(FIBER_CAPABILITY_FIBER_FIFO_QUEUE);
@@ -81,7 +82,10 @@ int main(void)
 		}
 		++i;
 	}
-	fiber_wait(pool);
+        error = fiber_wait(pool);
+	if (error != 0) {
+                printf("fiber_wait returned an error %d\n", error);
+        }
 	fiber_free(pool);
 	return 0;
 }
