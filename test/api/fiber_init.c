@@ -27,6 +27,37 @@ static void init_opts_valid(struct fiber_pool_init_options *opts,
 	*qops = mock_queue_noop_operations;
 
 	opts->queue_ops = qops;
+	/*opts->threads_number = FIBER_THREADS_NUMBER_MIN;
+        opts->queue_length = FIBER_QUEUE_LENGTH_MIN; */
+}
+
+/* Validates members of pool based on the options in opts */
+static void validate_pool(struct fiber_pool *pool,
+			  struct fiber_pool_init_options *opts)
+{
+	TEST_ASSERT_NOT_NULL(pool);
+
+	TEST_ASSERT_EQUAL(-1, pool->job_id_prev);
+	TEST_ASSERT_EQUAL(opts->threads_number, pool->threads_number);
+	TEST_ASSERT_EQUAL(0, pool->threads_working);
+	TEST_ASSERT_EQUAL(0, pool->threads_kill_number);
+	TEST_ASSERT_EQUAL(0, pool->pool_flags);
+	TEST_ASSERT_EQUAL(opts->malloc, pool->malloc);
+	TEST_ASSERT_EQUAL(opts->free, pool->free);
+
+	TEST_ASSERT_NOT_NULL(pool->queue_ops);
+	TEST_ASSERT_NOT_NULL(pool->job_queue);
+	if (opts->threads_number == 0) {
+		TEST_ASSERT_NULL(pool->thread_head);
+	} else {
+		TEST_ASSERT_NOT_NULL(pool->thread_head);
+	}
+
+	TEST_ASSERT_EQUAL(opts->queue_ops->push, pool->queue_ops->push);
+	TEST_ASSERT_EQUAL(opts->queue_ops->pop, pool->queue_ops->pop);
+	TEST_ASSERT_EQUAL(opts->queue_ops->init, pool->queue_ops->init);
+	TEST_ASSERT_EQUAL(opts->queue_ops->free, pool->queue_ops->free);
+	TEST_ASSERT_EQUAL(opts->queue_ops->length, pool->queue_ops->length);
 }
 
 static void test_invalid_length_runner(tpsize threads_number,
@@ -138,7 +169,7 @@ void test_fiber_init_queue_ops_func_ptrs_null(void)
 	TEST_ASSERT_NULL(res.pool);
 }
 
-void test_fiber_init_valid(void)
+void test_fiber_init_valid_no_threads(void)
 {
 	struct fiber_init_result res;
 	struct fiber_pool_init_options opts;
@@ -147,27 +178,29 @@ void test_fiber_init_valid(void)
 	INIT_RES(res);
 	init_opts_valid(&opts, &qops);
 
+	opts.threads_number = 0;
+
 	res = fiber_init(&opts);
 	TEST_ASSERT_EQUAL(0, res.error);
-	TEST_ASSERT_NOT_NULL(res.pool);
+	validate_pool(res.pool, &opts);
 
-	TEST_ASSERT_EQUAL(-1, res.pool->job_id_prev);
-	TEST_ASSERT_EQUAL(opts.threads_number, res.pool->threads_number);
-	TEST_ASSERT_EQUAL(0, res.pool->threads_working);
-	TEST_ASSERT_EQUAL(0, res.pool->threads_kill_number);
-	TEST_ASSERT_EQUAL(0, res.pool->pool_flags);
-	TEST_ASSERT_EQUAL(opts.malloc, res.pool->malloc);
-	TEST_ASSERT_EQUAL(opts.free, res.pool->free);
+	fiber_free(res.pool);
+}
 
-	TEST_ASSERT_NOT_NULL(res.pool->queue_ops);
-	TEST_ASSERT_NOT_NULL(res.pool->job_queue);
-	TEST_ASSERT_NOT_NULL(res.pool->thread_head);
+void test_fiber_init_valid_threads(void)
+{
+	struct fiber_init_result res;
+	struct fiber_pool_init_options opts;
+	struct fiber_queue_operations qops;
 
-	TEST_ASSERT_EQUAL(opts.queue_ops->push, res.pool->queue_ops->push);
-	TEST_ASSERT_EQUAL(opts.queue_ops->pop, res.pool->queue_ops->pop);
-	TEST_ASSERT_EQUAL(opts.queue_ops->init, res.pool->queue_ops->init);
-	TEST_ASSERT_EQUAL(opts.queue_ops->free, res.pool->queue_ops->free);
-	TEST_ASSERT_EQUAL(opts.queue_ops->length, res.pool->queue_ops->length);
+	INIT_RES(res);
+	init_opts_valid(&opts, &qops);
+
+	opts.threads_number = 1;
+
+	res = fiber_init(&opts);
+	TEST_ASSERT_EQUAL(0, res.error);
+	validate_pool(res.pool, &opts);
 
 	fiber_free(res.pool);
 }
@@ -182,7 +215,8 @@ int main(void)
 	RUN_TEST(test_fiber_init_opts_allocs_null);
 	RUN_TEST(test_fiber_init_queue_ops_null);
 	RUN_TEST(test_fiber_init_queue_ops_func_ptrs_null);
-	RUN_TEST(test_fiber_init_valid);
+	RUN_TEST(test_fiber_init_valid_no_threads);
+	RUN_TEST(test_fiber_init_valid_threads);
 
 	return UNITY_END();
 }

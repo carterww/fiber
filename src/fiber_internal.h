@@ -12,7 +12,7 @@
 #define FIBER_QUEUE_LENGTH_MIN (1)
 #define FIBER_QUEUE_LENGTH_MAX (FIBER_QSIZE_MAX)
 
-#define FIBER_THREADS_NUMBER_MIN (1)
+#define FIBER_THREADS_NUMBER_MIN (0)
 #define FIBER_THREADS_NUMBER_MAX (FIBER_TPSIZE_MAX)
 
 /* Represents a single thread in a fiber_pool */

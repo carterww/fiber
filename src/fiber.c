@@ -92,7 +92,7 @@ struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts)
 		goto err;
 	}
 
-	/* Starts the threads. Cleans up after itself on error. */
+	/* Start the threads. */
 	tp_start = fiber_thread_pool_start_threads(pool, opts->threads_number);
 	if (tp_start != 0) {
 		res.error = tp_start;
@@ -150,28 +150,31 @@ void fiber_free(struct fiber_pool *pool)
 	pool->free(pool);
 }
 
-void fiber_wait(struct fiber_pool *pool)
+int fiber_wait(struct fiber_pool *pool)
 {
-	tpsize working;
-	tpsize length;
+	tpsize threads_working;
 	uint32_t off;
 
 	if (pool == NULL) {
-		return;
+		return FBR_ENULL_ARGS;
 	}
+
 	(void)atomic_or_fetch_uint32(&pool->pool_flags, FIBER_POOL_FLAG_WAIT,
 				     FIBER_ATOMIC_ACQ_REL);
+	threads_working = atomic_load_tpsize(&pool->threads_working,
+					     FIBER_ATOMIC_ACQUIRE);
+
 	/* This sequence does not cause a race condition. If the number of
 	 * working threads is non zero AFTER we set the pool flags, we
 	 * know some thread will eventaully handle it. In the case where
 	 * working is 0, there are two possibilities:
          * 1. The queue is (or just was) empty and all threads are sleeping.
          * 2. There are 0 threads in the pool.
+         *
+         * In either case, there is nothing to wait on (no work = nothing to wait
+         * on, nothing to do the work = nothing to wait on).
          */
-	working = atomic_load_tpsize(&pool->threads_working,
-				     FIBER_ATOMIC_ACQUIRE);
-	length = pool->queue_ops->length(pool->job_queue);
-	if (working > 0 || length > 0) {
+	if (threads_working > 0) {
 		while (fiber_sem_wait(&pool->threads_sync) ==
 		       FBR_ETHREADING_EINTR)
 			;
@@ -179,6 +182,7 @@ void fiber_wait(struct fiber_pool *pool)
 	off = ~FIBER_POOL_FLAG_WAIT;
 	(void)atomic_and_fetch_uint32(&pool->pool_flags, off,
 				      FIBER_ATOMIC_ACQ_REL);
+	return 0;
 }
 
 qsize fiber_jobs_pending(struct fiber_pool *pool)
@@ -209,6 +213,10 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 				      FIBER_ATOMIC_ACQ_REL);
 	(void)atomic_or_fetch_uint32(&pool->pool_flags, FIBER_POOL_FLAG_KILL_N,
 				     FIBER_ATOMIC_ACQ_REL);
+	/* This wakes a sleeping worker thread (if one exists). Once the worker
+         * wakes up, it will check the pool's flags and see it needs to terminate
+         * itself.
+         */
 	fiber_worker_wake_other(pool);
 	return 0;
 }
@@ -219,6 +227,10 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 	struct fiber_thread *threads;
 	int start_res;
 	int lock_res;
+
+	/* This value needs to be initialized in case of early workers_start_err goto */
+	thread_list_result.threads_head = NULL;
+
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
@@ -388,6 +400,10 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 {
 	int error_code = 0;
 	struct fiber_thread_list_init_result fiber_thread_list;
+
+        if (threads_number <= 0) {
+                return 0;
+        }
 
 	fiber_thread_list =
 		fiber_thread_list_alloc(threads_number, pool->malloc);

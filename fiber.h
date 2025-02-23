@@ -13,8 +13,8 @@
  */
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
-#define FIBER_VERSION_MINOR (5)
-#define FIBER_VERSION_PATCH (1)
+#define FIBER_VERSION_MINOR (6)
+#define FIBER_VERSION_PATCH (0)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -71,10 +71,10 @@ struct fiber_queue_operations {
 	fiber_queue_push_function_t push;
 	fiber_queue_pop_function_t pop;
 	fiber_queue_init_function_t init;
-        fiber_queue_free_function_t free;
+	fiber_queue_free_function_t free;
 
 	/* Optional */
-        fiber_queue_length_function_t length;
+	fiber_queue_length_function_t length;
 };
 
 struct fiber_pool_init_options {
@@ -95,18 +95,18 @@ struct fiber_init_result {
  * the option was compiled into the binary.
  */
 enum fiber_capability_option {
-        FIBER_CAPABILITY_ASSERTS = 0,
-        FIBER_CAPABILITY_CHECK_JID_OVERFLOW = 1,
-        FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 2,
-        FIBER_CAPABILITY_BUILD_ENV_NORM = 3,
-        FIBER_CAPABILITY_BUILD_ENV_DEBUG = 4,
-        FIBER_CAPABILITY_BUILD_ENV_TEST = 5,
-        FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 6,
-        FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 7,
-        FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 8,
+	FIBER_CAPABILITY_ASSERTS = 0,
+	FIBER_CAPABILITY_CHECK_JID_OVERFLOW = 1,
+	FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 2,
+	FIBER_CAPABILITY_BUILD_ENV_NORM = 3,
+	FIBER_CAPABILITY_BUILD_ENV_DEBUG = 4,
+	FIBER_CAPABILITY_BUILD_ENV_TEST = 5,
+	FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 6,
+	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 7,
+	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 8,
 
-        /* This should always be the last one */
-        FIBER_CAPABILITY_ENUM_END
+	/* This should always be the last one */
+	FIBER_CAPABILITY_ENUM_END
 };
 
 /* Responsible for initializing all resources needed for the thread pool and
@@ -117,7 +117,7 @@ enum fiber_capability_option {
  *                  Fiber copies the data from the struct.
  *  malloc:         The allocator you would like Fiber to use.
  *  free:           The free functions corresponding to malloc.
- *  threads_number: The number of threads to create and start. Must be > 0.
+ *  threads_number: The number of threads to create and start. Must be >= 0.
  *  queue_length:   The length of the queue. This parameter will be passed
  *                  to the queue init function provided in queue_ops. Must be
  *                  > 0.
@@ -127,7 +127,7 @@ enum fiber_capability_option {
  * @error FBR_ENOMEM -> malloc returned a NULL pointer or a resource could not be initialized
  * due to insufficient memory.
  * @error FBR_ENULL_ARGS -> opts is NULL.
- * @error FBR_EINVLD_SIZE -> threads_number or queue_length are not > 0.
+ * @error FBR_EINVLD_SIZE -> threads_number was < 0 or queue_length was <= 0.
  * @error FBR_EQUEOPS_NONE ->  queue_ops is NULL or one of the four required functions
  * is NULL.
  * @error FBR_ENO_ALLOC -> malloc or free is NULL.
@@ -164,11 +164,12 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
  */
 void fiber_free(struct fiber_pool *pool);
 
-/* Blocks until the job queue is empty. Once the job queue is empty
- * (all threads asleep) this function will return.
+/* Blocks until the current threads in the pool finish the jobs in the queue.
+ * If there are no threads in the pool, it immediately returns.
  * @param pool -> The pool to wait on.
+ * @error FBR_ENULL_ARGS -> pool was NULL.
  */
-void fiber_wait(struct fiber_pool *pool);
+int fiber_wait(struct fiber_pool *pool);
 
 /* Get the number of jobs currently waiting to be executed in the job queue.
  * @param pool -> The pool which contains the job queue to check.
@@ -190,6 +191,7 @@ qsize fiber_jobs_pending(struct fiber_pool *pool);
  * @param threads_num -> The number of threads to remove. If this number is
  * greater than the current number of threads, all threads in the pool will
  * be cancelled as well as any newly created threads until the quota is met.
+ * I don't like this behavior, but it makes doing this much easier.
  * @returns -> 0 on success, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool is NULL.
  * @error FBR_EINVLD_SIZE -> threads_num is less than 1.

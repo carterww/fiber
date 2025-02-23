@@ -177,6 +177,7 @@ static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg)
 
 static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg)
 {
+	tpsize prev_threads_num;
 	int lock_res;
 	int unlock_res;
 	struct fiber_pool *pool;
@@ -194,9 +195,9 @@ static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg)
 	unlock_res = fiber_mutex_unlock(&pool->lock);
 	fiber_assert(unlock_res == 0);
 
-	(void)atomic_fetch_sub_tpsize(&pool->threads_number, 1,
-				      FIBER_ATOMIC_ACQ_REL);
-
+	prev_threads_num = atomic_fetch_sub_tpsize(&pool->threads_number, 1,
+						   FIBER_ATOMIC_ACQ_REL);
+	fiber_assert(prev_threads_num >= 1);
 	pool->free(arg);
 }
 
@@ -297,13 +298,14 @@ static int fiber_worker_handle_flag_kill(struct fiber_pool *pool)
 
 	if (to_kill >= 0) {
 		return 1;
+	} else {
+		/* If to_kill is negative it means we tried to kill more threads than
+                 * we needed. This is ok. We just need to add one back to the threads_kill_number.
+                 */
+		(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, 1,
+					      FIBER_ATOMIC_ACQ_REL);
 	}
 
-	/* If to_kill is negative it means we tried to kill more threads than
-         * we needed. This is ok. We just need to add one back to the threads_kill_number.
-         */
-	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, 1,
-				      FIBER_ATOMIC_ACQ_REL);
 	return 0;
 }
 
