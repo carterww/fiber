@@ -1,7 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include <stdint.h>
-
 #include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
@@ -12,7 +10,7 @@
 
 /* Declared and defined in fiber.c */
 extern jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
-			    uint32_t queue_flags);
+			    unsigned long queue_flags);
 
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg);
 static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg);

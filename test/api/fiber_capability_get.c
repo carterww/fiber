@@ -1,5 +1,3 @@
-#include <stdint.h>
-
 #include "test/unity.h"
 
 #include "fiber.h"
@@ -32,7 +30,6 @@ void test_capability_enum_out_of_range(void)
 void test_capability_current_build(void)
 {
 	int asserts;
-	int jid_overflow;
 	int fifo_queue;
 	int env_norm;
 	int env_debug;
@@ -42,8 +39,6 @@ void test_capability_current_build(void)
 	int atomic_clang;
 
 	asserts = fiber_capability_get(FIBER_CAPABILITY_ASSERTS);
-	jid_overflow =
-		fiber_capability_get(FIBER_CAPABILITY_CHECK_JID_OVERFLOW);
 	fifo_queue = fiber_capability_get(FIBER_CAPABILITY_FIBER_FIFO_QUEUE);
 	env_norm = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_NORM);
 	env_debug = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_DEBUG);
@@ -56,7 +51,6 @@ void test_capability_current_build(void)
 		FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG);
 
 	TEST_ASSERT_FALSE(CLAMP_BOOL(asserts) ^ CLAMP_BOOL(FIBER_COMPILE_ASSERTS));
-	TEST_ASSERT_FALSE(CLAMP_BOOL(jid_overflow) ^ CLAMP_BOOL(FIBER_COMPILE_CHECK_JID_OVERFLOW));
 	TEST_ASSERT_FALSE(CLAMP_BOOL(fifo_queue) ^ CLAMP_BOOL(FIBER_COMPILE_FIBER_FIFO_QUEUE));
 	/* If there's a better way to do this I'd love to know */
 #if defined(FIBER_BUILD_ENV_NORM)

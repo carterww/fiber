@@ -1,6 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,7 +23,7 @@
  * @note worker.c uses this to push jobs with preset job ids
  */
 jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
-		     uint32_t queue_flags);
+		     unsigned long queue_flags);
 
 static int
 fiber_validate_init_options(const struct fiber_pool_init_options *opts);
@@ -123,7 +122,7 @@ err:
 }
 
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
-		   uint32_t queue_flags)
+		   unsigned long queue_flags)
 {
 	if (pool == NULL || job == NULL || job->job_func == NULL) {
 		return FBR_ENULL_ARGS;
@@ -283,15 +282,15 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 }
 
 jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
-		     uint32_t queue_flags)
+		     unsigned long queue_flags)
 {
 	int push_res;
 
 	fiber_assert(pool->queue_ops != NULL && pool->queue_ops->push != NULL);
 	push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
 	switch (push_res) {
-        case 0:
-                break;
+	case 0:
+		break;
 	case FBR_EPUSH_JOB:
 	case FBR_EAGAIN:
 		fiber_assert(push_res < 0);
@@ -386,7 +385,7 @@ static jid fiber_fetch_next_jid(jid *job_id_prev)
          * modifying job_id_prev.
          */
 	jid j;
-#if FIBER_COMPILE_CHECK_JID_OVERFLOW != 0
+#if FIBER_JID_MAX <= 2147483647 /* Max signed 32 bit value */
 	jid next;
 	jid prev = atomic_load_jid(job_id_prev, FIBER_ATOMIC_ACQUIRE);
 	do {

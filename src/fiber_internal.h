@@ -3,12 +3,10 @@
 #ifndef _FIBER_INTERNAL_H
 #define _FIBER_INTERNAL_H
 
-#include <stdint.h>
-
 #include "fiber.h"
 #include "threading.h"
 
-/* Internal limits */
+/* Artificial limits that can be set by the user */
 #define FIBER_QUEUE_LENGTH_MIN (1)
 #define FIBER_QUEUE_LENGTH_MAX (FIBER_QSIZE_MAX)
 

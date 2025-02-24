@@ -3,8 +3,6 @@
 #ifndef _FIBER_TEST_INTERNAL_H
 #define _FIBER_TEST_INTERNAL_H
 
-#include <stdint.h>
-
 #include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
@@ -24,14 +22,14 @@
 #if defined(FIBER_BUILD_ENV_TEST)
 
 struct fiber_test_internal_capability {
-	uint8_t *capability_bitstring;
+	unsigned char *capability_bitstring;
 	size_t capability_bitstring_size;
 };
 
 struct fiber_test_internal_fiber {
 	/* This one isn't static but it isn't in a header file */
 	jid (*__fiber_job_push)(struct fiber_pool *pool, struct fiber_job *job,
-				uint32_t queue_flags);
+				unsigned long queue_flags);
 	int (*fiber_validate_init_options)(
 		const struct fiber_pool_init_options *opts);
 

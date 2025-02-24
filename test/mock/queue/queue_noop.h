@@ -12,7 +12,7 @@ struct mock_queue_noop {
 static const struct mock_queue_noop mock_queue = { 0 };
 
 static int mock_queue_noop_push(void *queue, struct fiber_job *job,
-				uint32_t flags)
+				unsigned long flags)
 {
 	(void)queue;
 	(void)job;
@@ -21,7 +21,7 @@ static int mock_queue_noop_push(void *queue, struct fiber_job *job,
 }
 
 static int mock_queue_noop_pop(void *queue, struct fiber_job *buffer,
-			       uint32_t flags)
+			       unsigned long flags)
 {
 	(void)queue;
 	(void)buffer;

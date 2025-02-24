@@ -19,10 +19,6 @@ COMPILE_ASSERTS=1
 # Compile the default FIFO queue (fiber_fifo.h and src/queue/fifo.c)
 COMPILE_FIBER_FIFO_QUEUE=1
 
-# boolean
-# Compile checks for Job ID overflow. This is recommended if sizeof(jid) < 8 bytes
-COMPILE_CHECK_JID_OVERFLOW=1
-
 # enum { pthread }
 # Underlying threading library to use
 THREADING_LIB=pthread

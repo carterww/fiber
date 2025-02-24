@@ -1,7 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include <stdint.h>
-
 #include "fiber.h"
 #include "utils.h"
 
@@ -55,21 +53,16 @@
  * will be split into multiple boolean options. All the options will be
  * stored in a bitstring.
  */
-static uint8_t capability_bitstring[] = {
+static unsigned char capability_bitstring[] = {
         /* 0-7 fiber_capability_option values */
         (
                 CAPABILITY_BIT(FIBER_COMPILE_ASSERTS, FIBER_CAPABILITY_ASSERTS) |
-                CAPABILITY_BIT(FIBER_COMPILE_CHECK_JID_OVERFLOW, FIBER_CAPABILITY_CHECK_JID_OVERFLOW) |
                 CAPABILITY_BIT(FIBER_COMPILE_FIBER_FIFO_QUEUE, FIBER_CAPABILITY_FIBER_FIFO_QUEUE) |
                 CAPABILITY_BIT(FIBER_BUILD_ENV_NORM_EXISTS, FIBER_CAPABILITY_BUILD_ENV_NORM) |
                 CAPABILITY_BIT(FIBER_BUILD_ENV_DEBUG_EXISTS, FIBER_CAPABILITY_BUILD_ENV_DEBUG) |
                 CAPABILITY_BIT(FIBER_BUILD_ENV_TEST_EXISTS, FIBER_CAPABILITY_BUILD_ENV_TEST) |
                 CAPABILITY_BIT(FIBER_THREADING_LIB_PTHREAD_EXISTS, FIBER_CAPABILITY_THREADING_LIB_PTHREAD) |
                 CAPABILITY_BIT(FIBER_ATOMIC_OPERATIONS_IMPL_GCC_EXISTS, FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC) |
-                0
-        ),
-        /* 8-15 fiber_capability_option values */
-        (
                 CAPABILITY_BIT(FIBER_ATOMIC_OPERATIONS_IMPL_CLANG_EXISTS, FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG) |
                 0
         )
@@ -80,7 +73,7 @@ int fiber_capability_get(enum fiber_capability_option opt)
         unsigned int idx;
         unsigned int shift;
 
-        if (opt < 0 || opt > FIBER_CAPABILITY_ENUM_END) {
+        if (opt < 0 || opt >= FIBER_CAPABILITY_ENUM_END) {
                 return 0;
         }
 

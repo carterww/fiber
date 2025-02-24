@@ -5,7 +5,6 @@
 
 #include <limits.h>
 #include <stddef.h>
-#include <stdint.h>
 
 /* Some test suites redefine these before including fiber.h to test
  * with different header versions. This is a simple but scuffed way
@@ -14,7 +13,7 @@
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (6)
-#define FIBER_VERSION_PATCH (1)
+#define FIBER_VERSION_PATCH (2)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -23,12 +22,15 @@ struct fiber_version {
 	int patch;
 };
 
-/* These must be signed */
+/* These types must be signed */
 typedef int tpsize; /* Threads in pool */
 typedef int qsize; /* Queue size */
 typedef long jid; /* Fiber job ID */
+
 #define FIBER_TPSIZE_MAX (INT_MAX)
+#define FIBER_TPSIZE_MIN (INT_MIN)
 #define FIBER_QSIZE_MAX (INT_MAX)
+#define FIBER_QSIZE_MIN (INT_MIN)
 #define FIBER_JID_MAX (LONG_MAX)
 #define FIBER_JID_MIN (LONG_MIN)
 
@@ -54,9 +56,9 @@ struct fiber_queue_init_result {
 
 /* Queue function typedefs */
 typedef int (*fiber_queue_push_function_t)(void *queue, struct fiber_job *job,
-					   uint32_t flags);
+					   unsigned long flags);
 typedef int (*fiber_queue_pop_function_t)(void *queue, struct fiber_job *buffer,
-					  uint32_t flags);
+					  unsigned long flags);
 typedef struct fiber_queue_init_result (*fiber_queue_init_function_t)(
 	qsize capacity, malloc_function_t _malloc, free_function_t _free);
 typedef void (*fiber_queue_free_function_t)(void *queue);
@@ -93,14 +95,13 @@ struct fiber_init_result {
  */
 enum fiber_capability_option {
 	FIBER_CAPABILITY_ASSERTS = 0,
-	FIBER_CAPABILITY_CHECK_JID_OVERFLOW = 1,
-	FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 2,
-	FIBER_CAPABILITY_BUILD_ENV_NORM = 3,
-	FIBER_CAPABILITY_BUILD_ENV_DEBUG = 4,
-	FIBER_CAPABILITY_BUILD_ENV_TEST = 5,
-	FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 6,
-	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 7,
-	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 8,
+	FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 1,
+	FIBER_CAPABILITY_BUILD_ENV_NORM = 2,
+	FIBER_CAPABILITY_BUILD_ENV_DEBUG = 3,
+	FIBER_CAPABILITY_BUILD_ENV_TEST = 4,
+	FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 5,
+	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 6,
+	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 7,
 
 	/* This should always be the last one */
 	FIBER_CAPABILITY_ENUM_END
@@ -153,7 +154,7 @@ struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts);
  * returned an error.
  */
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
-		   uint32_t queue_flags);
+		   unsigned long queue_flags);
 
 /* Frees the resources allocated by the pool. If you care about the work
  * being done by the threads in the pool, fiber_wait should be called to

@@ -93,6 +93,8 @@ test_summary:
 # Test groups
 test_api: clean_tests $(TEST_API_CAPABILITY) $(TEST_API_LIBVERSION_COMPAT) $(TEST_API_INIT) test_summary
 
+test_queue: clean_tests test_summary
+
 # Test API runners
 $(TEST_API_CAPABILITY): clean_$(TEST_API_CAPABILITY) $(BIN_DIR_TARGETS) $(BUILD_DIR_TARGETS) \
 	$(TEST_API_BIN_DIR)/$(TEST_API_CAPABILITY)
@@ -122,5 +124,8 @@ $(TEST_API_BIN_DIR)/$(TEST_API_INIT): $(TEST_API_FIBER_INIT_DEPS)
 $(TEST_API_BIN_DIR)/$(TEST_API_LIBVERSION_COMPAT): $(TEST_API_FIBER_LIBVERSION_COMPATIBLE_DEPS)
 	@$(CC) $(C_FLAGS) -o $@ $^
 
-.PHONY: all lib lib_so example clean clean_tests clean_test_api_% $(TEST_API_CAPABILITY) \
-	$(TEST_API_LIBVERSION_COMPAT)
+# Test queue runners
+# Test queue builders
+
+.PHONY: all lib lib_so example clean clean_tests clean_test_api_% test_summary test_api \
+	test_queue $(TEST_API_CAPABILITY) $(TEST_API_INIT) $(TEST_API_LIBVERSION_COMPAT)

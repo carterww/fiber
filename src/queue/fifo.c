@@ -127,7 +127,7 @@ static qsize fiber_queue_fetch_increment(fiber_mutex *mtx, qsize *target,
 	return target_current;
 }
 
-int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
+int fiber_queue_fifo_push(void *queue, struct fiber_job *job, unsigned long flags)
 {
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	int post_res;
@@ -157,7 +157,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags)
 	return 0;
 }
 
-int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags)
+int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, unsigned long flags)
 {
 	struct fifo_jq *fq = (struct fifo_jq *)queue;
 	int post_res;

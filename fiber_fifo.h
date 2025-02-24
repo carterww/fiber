@@ -3,8 +3,6 @@
 #ifndef _FIBER_QUEUE_FIFO_H
 #define _FIBER_QUEUE_FIFO_H
 
-#include <stdint.h>
-
 #include "fiber.h"
 
 /* Opaque job queue struct */
@@ -39,7 +37,7 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
  * @error FBR_EAGAIN -> There is no room on the queue and FIBER_QUEUE_BLOCK
  * was not set.
  */
-int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
+int fiber_queue_fifo_push(void *queue, struct fiber_job *job, unsigned long flags);
 
 /* Pops a job from the queue and puts its contents inside buffer.
  * @param queue -> Pointer to the job queue struct.
@@ -53,7 +51,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, uint32_t flags);
  * @error FBR_EAGAIN -> There is no job to pop from the queue and FIBER_QUEUE_BLOCK
  * was not set.
  */
-int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, uint32_t flags);
+int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, unsigned long flags);
 
 /* Frees the resources allocated by the queue.
  * @param queue -> Pointer to the job queue struct.
