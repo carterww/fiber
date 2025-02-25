@@ -17,7 +17,11 @@
 	} while (0)
 
 static const struct fiber_pool_init_options pool_base_options = {
-	NULL, malloc, free, FIBER_THREADS_NUMBER_MIN, FIBER_QUEUE_LENGTH_MIN,
+	NULL,
+	malloc,
+	free,
+	FIBER_THREADS_NUMBER_INIT_MIN,
+	FIBER_QUEUE_LENGTH_INIT_MIN,
 };
 
 static void init_opts_valid(struct fiber_pool_init_options *opts,
@@ -27,8 +31,6 @@ static void init_opts_valid(struct fiber_pool_init_options *opts,
 	*qops = mock_queue_noop_operations;
 
 	opts->queue_ops = qops;
-	/*opts->threads_number = FIBER_THREADS_NUMBER_MIN;
-        opts->queue_length = FIBER_QUEUE_LENGTH_MIN; */
 }
 
 /* Validates members of pool based on the options in opts */
@@ -102,8 +104,8 @@ void test_fiber_init_opts_threads_number_invalid(void)
 	/* min - 1 will never cause underflow because tpsize is always
          * signed and min should never be negative.
          */
-	test_invalid_length_runner(FIBER_THREADS_NUMBER_MIN - 1,
-				   FIBER_QUEUE_LENGTH_MIN);
+	test_invalid_length_runner(FIBER_THREADS_NUMBER_INIT_MIN - 1,
+				   FIBER_QUEUE_LENGTH_INIT_MIN);
 }
 
 void test_fiber_init_opts_queue_length_invalid(void)
@@ -111,8 +113,8 @@ void test_fiber_init_opts_queue_length_invalid(void)
 	/* min - 1 will never cause underflow because qsize is always
          * signed and min should never be negative.
          */
-	test_invalid_length_runner(FIBER_THREADS_NUMBER_MIN,
-				   FIBER_QUEUE_LENGTH_MIN - 1);
+	test_invalid_length_runner(FIBER_THREADS_NUMBER_INIT_MIN,
+				   FIBER_QUEUE_LENGTH_INIT_MIN - 1);
 }
 
 void test_fiber_init_opts_allocs_null(void)

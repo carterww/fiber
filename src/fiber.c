@@ -307,10 +307,10 @@ fiber_validate_init_options(const struct fiber_pool_init_options *opts)
 	if (opts == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	if (opts->threads_number < FIBER_THREADS_NUMBER_MIN ||
-	    opts->threads_number > FIBER_THREADS_NUMBER_MAX ||
-	    opts->queue_length < FIBER_QUEUE_LENGTH_MIN ||
-	    opts->queue_length > FIBER_QUEUE_LENGTH_MAX) {
+	if (opts->threads_number < FIBER_THREADS_NUMBER_INIT_MIN ||
+	    opts->threads_number > FIBER_THREADS_NUMBER_INIT_MAX ||
+	    opts->queue_length < FIBER_QUEUE_LENGTH_INIT_MIN ||
+	    opts->queue_length > FIBER_QUEUE_LENGTH_INIT_MAX) {
 		return FBR_EINVLD_SIZE;
 	}
 	if (opts->queue_ops == NULL) {
