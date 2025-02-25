@@ -76,7 +76,9 @@ test_run: test_result_clean $(DIRS)
 	$(test_summary_cmd)
 
 test_run_verbose: test_result_clean $(DIRS)
-	@find bin/test -type f -executable -print0 | xargs -0 -P 8 -I {} sh -c '{} | tee build/test/result/$$RANDOM.test ; echo ""' \;
+	@find bin/test -type f -executable -print0 | \
+		xargs -0 -P 8 -I {} \
+		sh -c '{} | tee build/test/result/$$RANDOM.test ; echo ""' \;
 	@wait
 	$(test_summary_cmd)
 
