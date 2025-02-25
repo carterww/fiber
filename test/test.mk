@@ -15,25 +15,27 @@ TEST_ALL_DEPS = build/test/unity.o
 TEST_COMMON_DEPS = $(OBJ_OUT)
 
 # List of TESTS
-TEST_NAME_PREFIX = test_fiber
-TEST_API_NAME_PREFIX = test_api_fiber
+TEST_API_CAPABILITY = $(TEST_API_BIN_DIR)/test_fiber_capability_get
+TEST_API_INIT = $(TEST_API_BIN_DIR)/test_fiber_api_init
+TEST_API_LIBVERSION_COMPAT = $(TEST_API_BIN_DIR)/test_fiber_api_libversion_compatible
 
-TEST_API_CAPABILITY = $(TEST_API_NAME_PREFIX)_capability_get
-TEST_API_INIT = $(TEST_API_NAME_PREFIX)_init
-TEST_API_LIBVERSION_COMPAT = $(TEST_API_NAME_PREFIX)_libversion_compatible
 
 # Test API dependencies
 
-TEST_API_FIBER_CAPABILITY_GET_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_capability_get.o \
-				     $(TEST_COMMON_DEPS)
+$(TEST_API_CAPABILITY)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_capability_get.o \
+			   $(TEST_COMMON_DEPS)
 # This suite uses a mock job queue so we don't need any queue modules. The mock queue is implemented in
 # a header.
 # The underlying thread library also isn't used because we don't need to actually start threads for these
 # tests.
-TEST_API_FIBER_INIT_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_init.o \
-			   $(TEST_MOCK_BUILD_DIR)/threading/threading_noop.o \
-			   $(filter-out build/queue/%.o build/threading_%.o, $(TEST_COMMON_DEPS))
+$(TEST_API_INIT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_init.o \
+			    $(TEST_MOCK_BUILD_DIR)/threading/threading_noop.o \
+			    $(filter-out build/queue/%.o build/threading_%.o, $(TEST_COMMON_DEPS))
 # This test suite implements its own fiber_libversion function so src/version.c is not
 # needed.
-TEST_API_FIBER_LIBVERSION_COMPATIBLE_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_libversion_compatible.o \
+$(TEST_API_LIBVERSION_COMPAT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_libversion_compatible.o \
 					    $(filter-out %version.o, $(TEST_COMMON_DEPS))
+
+TEST_API_ALL = $(TEST_API_CAPABILITY) $(TEST_API_INIT) $(TEST_API_LIBVERSION_COMPAT)
+
+TEST_ALL = $(TEST_API_ALL)
