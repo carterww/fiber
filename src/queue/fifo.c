@@ -10,7 +10,7 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 						     malloc_function_t _malloc,
 						     free_function_t _free)
 {
-	struct fifo_jq *fq = NULL;
+	struct fiber_fifo_jq *fq = NULL;
 	struct fiber_job *jobs = NULL;
 	int sem_void_res = 1;
 	int sem_jobs_res = 1;
@@ -129,7 +129,7 @@ static qsize fiber_queue_fetch_increment(fiber_mutex *mtx, qsize *target,
 
 int fiber_queue_fifo_push(void *queue, struct fiber_job *job, unsigned long flags)
 {
-	struct fifo_jq *fq = (struct fifo_jq *)queue;
+	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
 	int post_res;
 	int lock_res;
 	qsize tail;
@@ -159,7 +159,7 @@ int fiber_queue_fifo_push(void *queue, struct fiber_job *job, unsigned long flag
 
 int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, unsigned long flags)
 {
-	struct fifo_jq *fq = (struct fifo_jq *)queue;
+	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
 	int post_res;
 	int lock_res;
 	int head;
@@ -189,7 +189,7 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer, unsigned long fl
 void fiber_queue_fifo_free(void *queue)
 {
 	int des_res;
-	struct fifo_jq *fq = (struct fifo_jq *)queue;
+	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
 
 	fiber_assert(queue != NULL);
 	fq->free(fq->jobs);
@@ -211,7 +211,7 @@ void fiber_queue_fifo_free(void *queue)
 
 qsize fiber_queue_fifo_length(void *queue)
 {
-	struct fifo_jq *fq = (struct fifo_jq *)queue;
+	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
 	int sem_val;
 	int error_code;
 

@@ -6,7 +6,7 @@
 #include "fiber.h"
 
 /* Opaque job queue struct */
-struct fifo_jq;
+struct fiber_fifo_jq;
 
 /* Function definitions for the job queue's VTable */
 

@@ -11,13 +11,8 @@ C_FLAGS = -I. -O2 -std=c89 $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS)
 
 Q = @
 
-BIN_DIRS = bin \
-	   bin/test \
-	   bin/test/api
-BUILD_DIRS = build \
-	     build/queue build/test \
-	     build/test/result build/test/queue build/test/api build/test/mock \
-	     build/test/mock/alloc
+BIN_DIRS = bin $(TEST_BIN_DIRS)
+BUILD_DIRS = build build/queue $(TEST_BUILD_DIRS) build/test/result
 
 DIRS = $(BIN_DIRS) $(BUILD_DIRS)
 
@@ -84,6 +79,10 @@ test_run_verbose: test_result_clean $(DIRS)
 
 # Test groups
 test_api: $(DIRS) $(TEST_API_ALL)
+
+test_queue: $(DIRS) $(TEST_QUEUE_ALL)
+
+test_all: $(DIRS) $(TEST_ALL)
 
 define TARGET_COMPILE_TEST
 $(1): $$($(1)_DEPS)

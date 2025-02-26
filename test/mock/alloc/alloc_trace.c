@@ -1,19 +1,20 @@
-#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "test/unity.h"
 
 #include "alloc_trace.h"
+#include "src/threading.h"
 
-#define LOCK() TEST_ASSERT_EQUAL(0, pthread_mutex_lock(&malloc_ptr_list_mtx))
+#define LOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_lock(&alloc_trace_mutex))
 #define UNLOCK() \
-	TEST_ASSERT_EQUAL(0, pthread_mutex_unlock(&malloc_ptr_list_mtx))
+	TEST_ASSERT_EQUAL(0, fiber_mutex_unlock(&alloc_trace_mutex))
 #define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
 
 #define ALLOC_TRACE_MAX_PTRS (512)
 
-static pthread_mutex_t malloc_ptr_list_mtx = PTHREAD_MUTEX_INITIALIZER;
+/* alloc_fault uses this as well */
+fiber_mutex alloc_trace_mutex;
 static void *ptrs[ALLOC_TRACE_MAX_PTRS] = { NULL };
 static unsigned long malloc_calls = 0;
 static unsigned long free_calls = 0;
@@ -49,11 +50,16 @@ static void remove_ptr(void *ptr)
 
 void alloc_trace_init(void)
 {
+        int res;
+        res = fiber_mutex_init(&alloc_trace_mutex);
+        TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_destroy(void)
 {
-	pthread_mutex_destroy(&malloc_ptr_list_mtx);
+        int res;
+	res = fiber_mutex_destroy(&alloc_trace_mutex);
+        TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_verify(void)
@@ -90,8 +96,10 @@ void *alloc_trace_malloc(size_t size)
 
 	ptr = malloc(size);
 	LOCK();
-	++malloc_calls;
-	insert_ptr(ptr);
+        if (ptr != NULL) {
+                ++malloc_calls;
+                insert_ptr(ptr);
+        }
 	UNLOCK();
 	return ptr;
 }
@@ -99,8 +107,10 @@ void *alloc_trace_malloc(size_t size)
 void alloc_trace_free(void *ptr)
 {
 	LOCK();
-	++free_calls;
-	remove_ptr(ptr);
+        if (ptr != NULL) {
+                ++free_calls;
+                remove_ptr(ptr);
+        }
 	UNLOCK();
 	free(ptr);
 }
