@@ -27,8 +27,7 @@ $(TEST_API_CAPABILITY)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_capab
 # The underlying thread library also isn't used because we don't need to actually start threads for these
 # tests.
 $(TEST_API_INIT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_init.o \
-			$(TEST_MOCK_BUILD_DIR)/threading/threading_noop.o \
-			$(filter-out build/queue/%.o build/threading_%.o, $(TEST_COMMON_DEPS))
+			$(TEST_COMMON_DEPS) $(TEST_MOCK_BUILD_DIR)/alloc/alloc_trace.o
 # This test suite implements its own fiber_libversion function so src/version.c is not
 # needed.
 $(TEST_API_LIBVERSION_COMPAT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_libversion_compatible.o \

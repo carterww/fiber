@@ -1,10 +1,11 @@
 #include <stdlib.h>
 
+#include "test/mock/alloc/alloc_trace.h"
 #include "test/unity.h"
 
 #include "fiber.h"
+#include "fiber_fifo.h"
 #include "src/fiber_internal.h"
-#include "test/mock/queue/queue_noop.h"
 
 /* All FBR_E* errors are negative. */
 #define FIBER_INIT_INVALID_ERROR (20)
@@ -16,10 +17,12 @@
 		res.pool = (struct fiber_pool *)0x4;  \
 	} while (0)
 
+static struct fiber_queue_operations fifo_qops = FIBER_FIFO_QUEUE_OPERATIONS;
+
 static const struct fiber_pool_init_options pool_base_options = {
 	NULL,
-	malloc,
-	free,
+	alloc_trace_malloc,
+	alloc_trace_free,
 	FIBER_THREADS_NUMBER_INIT_MIN,
 	FIBER_QUEUE_LENGTH_INIT_MIN,
 };
@@ -28,7 +31,7 @@ static void init_opts_valid(struct fiber_pool_init_options *opts,
 			    struct fiber_queue_operations *qops)
 {
 	*opts = pool_base_options;
-	*qops = mock_queue_noop_operations;
+	*qops = fifo_qops;
 
 	opts->queue_ops = qops;
 }
@@ -82,10 +85,12 @@ static void test_invalid_length_runner(tpsize threads_number,
 
 void setUp(void)
 {
+        alloc_trace_reset();
 }
 
 void tearDown(void)
 {
+        alloc_trace_verify();
 }
 
 void test_fiber_init_opts_null(void)
@@ -127,14 +132,14 @@ void test_fiber_init_opts_allocs_null(void)
 	init_opts_valid(&opts, &qops);
 
 	opts.malloc = NULL;
-	opts.free = free;
+	opts.free = alloc_trace_free;
 	res = fiber_init(&opts);
 	TEST_ASSERT_EQUAL(FBR_ENO_ALLOC, res.error);
 	TEST_ASSERT_NULL(res.pool);
 
 	INIT_RES(res);
 
-	opts.malloc = malloc;
+	opts.malloc = alloc_trace_malloc;
 	opts.free = NULL;
 	res = fiber_init(&opts);
 	TEST_ASSERT_EQUAL(FBR_ENO_ALLOC, res.error);
@@ -211,6 +216,8 @@ int main(void)
 {
 	UNITY_BEGIN();
 
+        alloc_trace_init();
+
 	RUN_TEST(test_fiber_init_opts_null);
 	RUN_TEST(test_fiber_init_opts_threads_number_invalid);
 	RUN_TEST(test_fiber_init_opts_queue_length_invalid);
@@ -219,6 +226,8 @@ int main(void)
 	RUN_TEST(test_fiber_init_queue_ops_func_ptrs_null);
 	RUN_TEST(test_fiber_init_valid_no_threads);
 	RUN_TEST(test_fiber_init_valid_threads);
+
+        alloc_trace_destroy();
 
 	return UNITY_END();
 }

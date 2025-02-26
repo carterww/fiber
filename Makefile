@@ -17,7 +17,7 @@ BIN_DIRS = bin \
 BUILD_DIRS = build \
 	     build/queue build/test \
 	     build/test/result build/test/queue build/test/api build/test/mock \
-	     build/test/mock/threading
+	     build/test/mock/alloc
 
 DIRS = $(BIN_DIRS) $(BUILD_DIRS)
 
@@ -83,7 +83,7 @@ test_run_verbose: test_result_clean $(DIRS)
 	$(test_summary_cmd)
 
 # Test groups
-test_api: $(TEST_API_ALL)
+test_api: $(DIRS) $(TEST_API_ALL)
 
 define TARGET_COMPILE_TEST
 $(1): $$($(1)_DEPS)

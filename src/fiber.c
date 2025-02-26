@@ -148,6 +148,7 @@ void fiber_free(struct fiber_pool *pool)
 	fiber_assert(des_res == 0);
 	des_res = fiber_sem_destroy(&pool->threads_sync);
 	fiber_assert(des_res == 0);
+
 	pool->free(pool);
 }
 
