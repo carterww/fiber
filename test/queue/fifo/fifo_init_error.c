@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "test/unity.h"
 #include "test/mock/alloc/alloc_fault.h"
 
@@ -14,7 +16,7 @@
 		struct fiber_queue_init_result res;                           \
 		struct fiber_fifo_jq *jq;                                     \
                                                                               \
-		alloc_fault_reset(normal_malloc_count);                       \
+		alloc_fault_reset(malloc, free, normal_malloc_count);         \
                                                                               \
 		res = fiber_queue_fifo_init(queue_length, alloc_fault_malloc, \
 					    alloc_fault_free);                \
@@ -49,7 +51,7 @@ void test_fifo_init_malloc_fault_past_bound(void)
 	struct fiber_queue_init_result res;
 	struct fiber_fifo_jq *jq;
 
-	alloc_fault_reset(QUEUE_FIFO_MALLOC_COUNT);
+	alloc_fault_reset(malloc, free, QUEUE_FIFO_MALLOC_COUNT);
 
 	res = fiber_queue_fifo_init(queue_length, alloc_fault_malloc,
 				    alloc_fault_free);

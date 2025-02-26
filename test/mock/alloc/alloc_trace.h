@@ -3,11 +3,13 @@
 
 #include <stdlib.h>
 
+#include "fiber.h"
+
 void alloc_trace_init(void);
 void alloc_trace_destroy(void);
 
 void alloc_trace_verify(void);
-void alloc_trace_reset(void);
+void alloc_trace_reset(malloc_function_t _malloc, free_function_t _free);
 
 void *alloc_trace_malloc(size_t size);
 void alloc_trace_free(void *ptr);

@@ -1,65 +1,118 @@
 #include <stdlib.h>
-#include <string.h>
 
-#include "test/unity.h"
+#include "fiber.h"
 
 #include "alloc_trace.h"
 #include "src/threading.h"
+#include "test/unity.h"
 
 #define LOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_lock(&alloc_trace_mutex))
-#define UNLOCK() \
-	TEST_ASSERT_EQUAL(0, fiber_mutex_unlock(&alloc_trace_mutex))
-#define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
+#define UNLOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_unlock(&alloc_trace_mutex))
 
-#define ALLOC_TRACE_MAX_PTRS (512)
+#define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
+#define ALLOC_TRACE_MAX_PTRS (256)
+
+#define MALLOC_PADDING_BYTES (4)
+#define PADDING_BYTE_VALUE (0x5a)
+
+struct alloc_trace_ptr {
+	void *ptr;
+	size_t user_size;
+	size_t padding;
+};
 
 /* alloc_fault uses this as well */
 fiber_mutex alloc_trace_mutex;
-static void *ptrs[ALLOC_TRACE_MAX_PTRS] = { NULL };
+static struct alloc_trace_ptr ptrs[ALLOC_TRACE_MAX_PTRS] = { 0 };
 static unsigned long malloc_calls = 0;
 static unsigned long free_calls = 0;
 
-static void insert_ptr(void *ptr)
+static malloc_function_t _malloc = NULL;
+static free_function_t _free = NULL;
+
+#define canary_loop_setup(val)                 \
+	char *user_ptr;                        \
+	char *start_front;                     \
+	char *start_end;                       \
+	unsigned long i;                       \
+                                               \
+	user_ptr = (char *)val->ptr;           \
+	start_front = user_ptr - val->padding; \
+	start_end = user_ptr + val->user_size; \
+                                               \
+	for (i = 0; i < val->padding; ++i)
+
+static void set_canary(struct alloc_trace_ptr *val)
+{
+	canary_loop_setup(val)
+	{
+		start_front[i] = PADDING_BYTE_VALUE;
+		start_end[i] = PADDING_BYTE_VALUE;
+	}
+}
+
+static void check_canary(struct alloc_trace_ptr *val)
+{
+	canary_loop_setup(val)
+	{
+		TEST_ASSERT_EQUAL(PADDING_BYTE_VALUE, start_front[i]);
+		TEST_ASSERT_EQUAL(PADDING_BYTE_VALUE, start_end[i]);
+	}
+}
+
+static void insert_ptr(char *user_ptr, size_t user_size, size_t padding)
 {
 	unsigned long i;
 
 	for (i = 0; i < PTRS_LENGTH(); ++i) {
-		if (ptrs[i] == NULL) {
-			ptrs[i] = ptr;
-			return;
+		if (ptrs[i].ptr != NULL) {
+			continue;
 		}
+		ptrs[i].ptr = (void *)user_ptr;
+		ptrs[i].user_size = user_size;
+		ptrs[i].padding = padding;
+		set_canary(&ptrs[i]);
+		return;
 	}
+	UNLOCK();
 	TEST_FAIL_MESSAGE("alloc_trace has a full list of ptrs. Consider "
 			  "raising ALLOC_TRACE_MAX_PTRS or making ptr tracking "
 			  "dyanmic.");
 }
 
-static void remove_ptr(void *ptr)
+static void *remove_ptr(char *user_ptr)
 {
 	unsigned long i;
+	char *res = NULL;
 
 	for (i = 0; i < PTRS_LENGTH(); ++i) {
-		if (ptrs[i] == ptr) {
-			ptrs[i] = NULL;
-			return;
+		if (ptrs[i].ptr != (void *)user_ptr) {
+			continue;
 		}
+		check_canary(&ptrs[i]);
+		res = (char *)ptrs[i].ptr - ptrs[i].padding;
+		ptrs[i].ptr = NULL;
+		ptrs[i].user_size = 0;
+		ptrs[i].padding = 0;
+		return res;
 	}
+	UNLOCK();
 	TEST_FAIL_MESSAGE(
 		"alloc_trace encountered a ptr that was never returned by malloc.");
 }
 
 void alloc_trace_init(void)
 {
-        int res;
-        res = fiber_mutex_init(&alloc_trace_mutex);
-        TEST_ASSERT_EQUAL(0, res);
+	int res;
+	res = fiber_mutex_init(&alloc_trace_mutex);
+	TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_destroy(void)
 {
-        int res;
+	int res;
 	res = fiber_mutex_destroy(&alloc_trace_mutex);
-        TEST_ASSERT_EQUAL(0, res);
+	TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_verify(void)
@@ -68,7 +121,7 @@ void alloc_trace_verify(void)
 	unsigned long count = 0;
 
 	for (i = 0; i < PTRS_LENGTH(); ++i) {
-		if (ptrs[i] != NULL) {
+		if (ptrs[i].ptr != NULL) {
 			++count;
 		}
 	}
@@ -79,38 +132,54 @@ void alloc_trace_verify(void)
 		0, count, "Encountered a memory leak in alloc_trace_verify");
 }
 
-void alloc_trace_reset(void)
+void alloc_trace_reset(malloc_function_t _mal, free_function_t _fr)
 {
 	unsigned long i;
 
 	for (i = 0; i < PTRS_LENGTH(); ++i) {
-		ptrs[i] = NULL;
+		ptrs[i].ptr = NULL;
+		ptrs[i].user_size = 0;
+		ptrs[i].padding = 0;
 	}
 	malloc_calls = 0;
 	free_calls = 0;
+	_malloc = _mal;
+	_free = _fr;
 }
 
 void *alloc_trace_malloc(size_t size)
 {
 	void *ptr;
+	char *user_ptr;
 
-	ptr = malloc(size);
+	TEST_ASSERT_NOT_NULL_MESSAGE(
+		_malloc, "alloc_trace never received a malloc function.");
+	/* Allocate MALLOC_PADDING bytes on boths ends of the user's
+         * new memory. We will set known values here and make sure those
+         * values are still there on free.
+         */
+	ptr = _malloc(size + MALLOC_PADDING_BYTES * 2);
+	user_ptr = (char *)ptr + MALLOC_PADDING_BYTES;
 	LOCK();
-        if (ptr != NULL) {
-                ++malloc_calls;
-                insert_ptr(ptr);
-        }
+	if (ptr != NULL) {
+		++malloc_calls;
+		insert_ptr((void *)user_ptr, size, MALLOC_PADDING_BYTES);
+	}
 	UNLOCK();
-	return ptr;
+	return user_ptr;
 }
 
 void alloc_trace_free(void *ptr)
 {
+	char *user_ptr;
+
+	TEST_ASSERT_NOT_NULL_MESSAGE(
+		_free, "alloc_trace never received a free function.");
+	TEST_ASSERT_NOT_NULL_MESSAGE(ptr, "alloc_trace_free given NULL ptr");
+
 	LOCK();
-        if (ptr != NULL) {
-                ++free_calls;
-                remove_ptr(ptr);
-        }
+	++free_calls;
+	user_ptr = remove_ptr(ptr);
 	UNLOCK();
-	free(ptr);
+	_free((void *)user_ptr);
 }

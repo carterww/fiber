@@ -85,7 +85,7 @@ static void test_invalid_length_runner(tpsize threads_number,
 
 void setUp(void)
 {
-        alloc_trace_reset();
+        alloc_trace_reset(malloc, free);
 }
 
 void tearDown(void)
@@ -122,7 +122,7 @@ void test_fiber_init_opts_queue_length_invalid(void)
 				   FIBER_QUEUE_LENGTH_INIT_MIN - 1);
 }
 
-void test_fiber_init_opts_allocs_null(void)
+void test_fiber_init_opts_alloc_null(void)
 {
 	struct fiber_init_result res;
 	struct fiber_pool_init_options opts;
@@ -221,7 +221,7 @@ int main(void)
 	RUN_TEST(test_fiber_init_opts_null);
 	RUN_TEST(test_fiber_init_opts_threads_number_invalid);
 	RUN_TEST(test_fiber_init_opts_queue_length_invalid);
-	RUN_TEST(test_fiber_init_opts_allocs_null);
+	RUN_TEST(test_fiber_init_opts_alloc_null);
 	RUN_TEST(test_fiber_init_queue_ops_null);
 	RUN_TEST(test_fiber_init_queue_ops_func_ptrs_null);
 	RUN_TEST(test_fiber_init_valid_no_threads);
