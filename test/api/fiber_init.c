@@ -86,14 +86,14 @@ static void test_invalid_length_runner(tpsize threads_number,
 
 void setUp(void)
 {
-        alloc_trace_reset(malloc, free);
-        threading_trace_fault_reset();
+	alloc_trace_reset(malloc, free);
+	threading_trace_fault_reset();
 }
 
 void tearDown(void)
 {
-        alloc_trace_verify();
-        threading_trace_fault_verify();
+	alloc_trace_verify();
+	threading_trace_fault_verify();
 }
 
 void test_fiber_init_opts_null(void)
@@ -219,8 +219,8 @@ int main(void)
 {
 	UNITY_BEGIN();
 
-        threading_trace_fault_init();
-        alloc_trace_init();
+	threading_trace_fault_init();
+	alloc_trace_init();
 
 	RUN_TEST(test_fiber_init_opts_null);
 	RUN_TEST(test_fiber_init_opts_threads_number_invalid);
@@ -231,8 +231,8 @@ int main(void)
 	RUN_TEST(test_fiber_init_valid_no_threads);
 	RUN_TEST(test_fiber_init_valid_threads);
 
-        alloc_trace_destroy();
-        threading_trace_fault_destroy();
+	alloc_trace_destroy();
+	threading_trace_fault_destroy();
 
 	return UNITY_END();
 }

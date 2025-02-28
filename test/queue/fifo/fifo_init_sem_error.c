@@ -78,7 +78,6 @@ int main(void)
 	RUN_TEST(test_fifo_init_sem_fault_past_bound);
 
 	alloc_trace_destroy();
-	/* Don't make the mistake I did, make sure this is freed last */
 	threading_trace_fault_destroy();
 	return UNITY_END();
 }
