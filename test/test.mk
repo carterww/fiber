@@ -59,7 +59,10 @@ $(TEST_API_CAPABILITY)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_capab
 			      $(TEST_COMMON_DEPS)
 
 $(TEST_API_INIT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_init.o \
-			$(TEST_COMMON_DEPS) $(TEST_MOCK_BUILD_DIR)/alloc/alloc_trace.o
+			$(filter-out build/$(THREADING_OBJ), $(TEST_COMMON_DEPS)) \
+			$(TEST_MOCK_ALLOC_BUILD_DIR)/alloc_trace.o \
+			$(TEST_MOCK_THREADING_BUILD_DIR)/threading_trace_fault.o
+
 # This test suite implements its own fiber_libversion function so src/version.c is not
 # needed.
 $(TEST_API_LIBVERSION_COMPAT)_DEPS = $(TEST_ALL_DEPS) $(TEST_API_BUILD_DIR)/fiber_libversion_compatible.o \

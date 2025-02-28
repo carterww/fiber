@@ -359,7 +359,7 @@ static void thread_tracker_remove(const tid *thread_id)
 		      thread_tracker[i].join_count == 1);
 	if (count_sum != 2) {
 		UNLOCK_TRACKER(&thread_tracker_lock);
-		TEST_ASSERT_EQUAL(2, count_sum);
+		TEST_ASSERT_EQUAL_MESSAGE(2, count_sum, "thread call count_sum");
 	}
 	if (!valid_pair) {
 		UNLOCK_TRACKER(&thread_tracker_lock);
@@ -522,13 +522,18 @@ int fiber_thread_create(tid *thread_id, fiber_job_function_t runner, void *arg)
 void fiber_thread_exit(void *ret_val)
 {
 	tid caller_thread_id = 0;
+	struct threading_trace_fault_thread_tracker *tracker;
+
 #if defined(FIBER_THREADING_LIB_PTHREAD)
 	caller_thread_id = pthread_self();
 #else
 #error "threading_trace_fault.c only implements a way to get the current thread's id for pthreads"
 #endif
+
 	threading_vtable.thread_exit(ret_val);
 	LOCK_TRACKER(&thread_tracker_lock);
+        tracker = thread_tracker_get(&caller_thread_id);
+        ++tracker->join_count;
 	thread_tracker_remove(&caller_thread_id);
 	UNLOCK_TRACKER(&thread_tracker_lock);
 }
@@ -552,11 +557,14 @@ int fiber_thread_detach(const tid *thread_id)
 int fiber_thread_join(const tid *thread_id, void **ret_val)
 {
 	int res;
+	struct threading_trace_fault_thread_tracker *tracker;
 
 	IF_FAIL_RETURN(thread_control, join);
 	res = threading_vtable.thread_join(thread_id, ret_val);
 	if (res == 0) {
 		LOCK_TRACKER(&thread_tracker_lock);
+		tracker = thread_tracker_get(thread_id);
+		++tracker->join_count;
 		thread_tracker_remove(thread_id);
 		UNLOCK_TRACKER(&thread_tracker_lock);
 	}
