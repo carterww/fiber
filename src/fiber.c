@@ -255,8 +255,6 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num)
 			      thread_list_result.threads_head);
 	lock_res = fiber_mutex_unlock(&pool->lock);
 	fiber_assert(lock_res == 0);
-	(void)atomic_add_fetch_tpsize(&pool->threads_number, threads_num,
-				      FIBER_ATOMIC_ACQ_REL);
 	return 0;
 workers_start_err:
 	/* Failed to start workers. Need to cancel any that were started and free the

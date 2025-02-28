@@ -100,6 +100,8 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 				  fiber_worker_thread_arg);
 	(void)fiber_thread_cancel_type_set(FIBER_THREAD_CANCEL_DEFERRED);
 	(void)fiber_thread_cancel_enable();
+	(void)atomic_add_fetch_tpsize(&pool->threads_number, 1,
+				      FIBER_ATOMIC_ACQ_REL);
 
 	fiber_worker_loop(pool, thread);
 
@@ -209,7 +211,7 @@ static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg)
 	unlock_res = fiber_mutex_unlock(&pool->lock);
 	fiber_assert(unlock_res == 0);
 
-        pool->free(thread);
+	pool->free(thread);
 
 	prev_threads_num = atomic_fetch_sub_tpsize(&pool->threads_number, 1,
 						   FIBER_ATOMIC_ACQ_REL);
