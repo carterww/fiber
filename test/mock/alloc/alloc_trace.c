@@ -11,9 +11,12 @@
  * modules. If we don't and are using threading_trace_fault, threading_trace_fault
  * wil atttempt to track out mutex calls here and ruin everything.
  */
-extern  const struct fiber_threading_vtable threading_vtable;
-#define LOCK() TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_lock(&alloc_trace_mutex)))
-#define UNLOCK() TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_unlock(&alloc_trace_mutex)))
+extern const struct fiber_threading_vtable threading_vtable;
+#define LOCK() \
+	TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_lock(&alloc_trace_mutex)))
+#define UNLOCK()             \
+	TEST_ASSERT_EQUAL(0, \
+			  (threading_vtable.mutex_unlock(&alloc_trace_mutex)))
 
 #define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
 #define ALLOC_TRACE_MAX_PTRS (256)
