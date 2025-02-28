@@ -9,6 +9,34 @@
 #include "threading.h"
 #include "utils.h"
 
+/* This is here to support the threading_fault module in test/mock/threading.
+ * Redefining these functions and putting them into a vtable allows us to use
+ * their implementation while adding some other code before and after it. Don't
+ * worry about this at all, it is just for testing purposes.
+ */
+#if defined(FIBER_THREADING_INTERCEPT) && defined(FIBER_BUILD_ENV_TEST)
+#define fiber_sem_init __fiber_sem_init
+#define fiber_sem_destroy __fiber_sem_destroy
+#define fiber_sem_wait __fiber_sem_wait
+#define fiber_sem_trywait __fiber_sem_trywait
+#define fiber_sem_post __fiber_sem_post
+#define fiber_sem_getvalue __fiber_sem_getvalue
+
+#define fiber_mutex_init __fiber_mutex_init
+#define fiber_mutex_destroy __fiber_mutex_destroy
+#define fiber_mutex_lock __fiber_mutex_lock
+#define fiber_mutex_unlock __fiber_mutex_unlock
+
+#define fiber_thread_create __fiber_thread_create
+#define fiber_thread_exit __fiber_thread_exit
+#define fiber_thread_detach __fiber_thread_detach
+#define fiber_thread_join __fiber_thread_join
+#define fiber_thread_cancel_enable __fiber_thread_enable
+#define fiber_thread_cancel_disable __fiber_thread_disable
+#define fiber_thread_cancel_type_set __fiber_thread_cancel_type_set
+#define fiber_thread_cancel __fiber_thread_cancel
+#endif /* FIBER_TEST_THREADING_MOCK && FIBER_BUILD_ENV_TEST */
+
 /** Semaphore functions **/
 
 int fiber_sem_init(fiber_semaphore *sem, unsigned int initial_value)
@@ -374,3 +402,46 @@ struct fiber_test_internal_threading_pthread
 		__fiber_thread_setcancelstate
 	};
 #endif /* FIBER_BUILD_ENV_TEST */
+
+#if defined(FIBER_BUILD_ENV_TEST)
+const struct fiber_threading_vtable threading_vtable = {
+	fiber_sem_init,
+	fiber_sem_destroy,
+	fiber_sem_wait,
+	fiber_sem_trywait,
+	fiber_sem_post,
+	fiber_sem_getvalue,
+	fiber_mutex_init,
+	fiber_mutex_destroy,
+	fiber_mutex_lock,
+	fiber_mutex_unlock,
+	fiber_thread_create,
+	fiber_thread_exit,
+	fiber_thread_detach,
+	fiber_thread_join,
+	fiber_thread_cancel_enable,
+	fiber_thread_cancel_disable,
+	fiber_thread_cancel_type_set,
+	fiber_thread_cancel,
+};
+#endif /* FIBER_BUILD_ENV_TEST */
+#if defined(FIBER_THREADING_INTERCEPT) && defined(FIBER_BUILD_ENV_TEST)
+#undef fiber_sem_init
+#undef fiber_sem_destroy
+#undef fiber_sem_wait
+#undef fiber_sem_trywait
+#undef fiber_sem_post
+#undef fiber_sem_getvalue
+#undef fiber_mutex_init
+#undef fiber_mutex_destroy
+#undef fiber_mutex_lock
+#undef fiber_mutex_unlock
+#undef fiber_thread_create
+#undef fiber_thread_exit
+#undef fiber_thread_detach
+#undef fiber_thread_join
+#undef fiber_thread_cancel_enable
+#undef fiber_thread_cancel_disable
+#undef fiber_thread_cancel_type_set
+#undef fiber_thread_cancel
+#endif /* FIBER_THREADING_INTERCEPT && FIBER_BUILD_ENV_TEST */

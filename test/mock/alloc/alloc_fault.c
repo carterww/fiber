@@ -1,6 +1,7 @@
 #include "fiber.h"
 
 #include "src/threading.h"
+#include "test/mock/alloc/alloc_fault.h"
 #include "test/mock/alloc/alloc_trace.h"
 #include "test/unity.h"
 
@@ -8,7 +9,7 @@
 #define UNLOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_unlock(&alloc_trace_mutex))
 
 extern fiber_mutex alloc_trace_mutex;
-static unsigned long normal_malloc_count = 0;
+static unsigned long fail_after = 0;
 
 void alloc_fault_init(void)
 {
@@ -29,17 +30,17 @@ void alloc_fault_reset(malloc_function_t _malloc, free_function_t _free,
 		       unsigned long n)
 {
 	alloc_trace_reset(_malloc, _free);
-	normal_malloc_count = n;
+	fail_after = n;
 }
 
 void *alloc_fault_malloc(size_t size)
 {
 	LOCK();
-	if (normal_malloc_count == 0) {
+	if (fail_after == 0) {
 		UNLOCK();
 		return NULL;
 	}
-	--normal_malloc_count;
+	--fail_after;
 	UNLOCK();
 	return alloc_trace_malloc(size);
 }

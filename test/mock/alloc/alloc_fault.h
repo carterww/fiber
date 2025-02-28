@@ -10,7 +10,7 @@ void alloc_fault_destroy(void);
 
 void alloc_fault_verify(void);
 void alloc_fault_reset(malloc_function_t _malloc, free_function_t _free,
-		       unsigned long normal_malloc_count);
+		       unsigned long fail_after);
 
 void *alloc_fault_malloc(size_t size);
 void alloc_fault_free(void *ptr);

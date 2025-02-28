@@ -21,6 +21,29 @@
  */
 #if defined(FIBER_BUILD_ENV_TEST)
 
+struct fiber_threading_vtable {
+	int (*sem_init)(fiber_semaphore *, unsigned int);
+	int (*sem_destroy)(fiber_semaphore *);
+	int (*sem_wait)(fiber_semaphore *);
+	int (*sem_trywait)(fiber_semaphore *);
+	int (*sem_post)(fiber_semaphore *);
+	int (*sem_getvalue)(fiber_semaphore *, int *);
+
+	int (*mutex_init)(fiber_mutex *);
+	int (*mutex_destroy)(fiber_mutex *);
+	int (*mutex_lock)(fiber_mutex *);
+	int (*mutex_unlock)(fiber_mutex *);
+
+	int (*thread_create)(tid *, fiber_job_function_t, void *);
+	void (*thread_exit)(void *);
+	int (*thread_detach)(const tid *);
+	int (*thread_join)(const tid *, void **);
+	int (*thread_cancel_enable)(void);
+	int (*thread_cancel_disable)(void);
+	int (*thread_cancel_type_set)(int);
+	int (*thread_cancel)(const tid *);
+};
+
 struct fiber_test_internal_capability {
 	unsigned char *capability_bitstring;
 	size_t capability_bitstring_size;
@@ -72,10 +95,12 @@ struct fiber_test_internal_worker {
 					 struct fiber_thread *thread,
 					 struct fiber_job *job);
 	int (*fiber_worker_handle_flags)(struct fiber_pool *pool);
-	int (*fiber_worker_should_handle_flag_kill)(struct fiber_pool *pool,
-						    enum fiber_atomic_memorder load_memorder);
-	int (*fiber_worker_should_handle_flag_wait)(struct fiber_pool *pool,
-						    enum fiber_atomic_memorder load_memorder);
+	int (*fiber_worker_should_handle_flag_kill)(
+		struct fiber_pool *pool,
+		enum fiber_atomic_memorder load_memorder);
+	int (*fiber_worker_should_handle_flag_wait)(
+		struct fiber_pool *pool,
+		enum fiber_atomic_memorder load_memorder);
 	int (*fiber_worker_handle_flag_kill)(struct fiber_pool *pool);
 	void (*fiber_worker_handle_flag_wait)(struct fiber_pool *pool);
 

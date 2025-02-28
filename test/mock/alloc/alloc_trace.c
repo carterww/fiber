@@ -3,11 +3,17 @@
 #include "fiber.h"
 
 #include "alloc_trace.h"
+#include "src/test_internal.h"
 #include "src/threading.h"
 #include "test/unity.h"
 
-#define LOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_lock(&alloc_trace_mutex))
-#define UNLOCK() TEST_ASSERT_EQUAL(0, fiber_mutex_unlock(&alloc_trace_mutex))
+/* We ALWAYS use the Vtable exported by the threading module in internal testing
+ * modules. If we don't and are using threading_trace_fault, threading_trace_fault
+ * wil atttempt to track out mutex calls here and ruin everything.
+ */
+extern  const struct fiber_threading_vtable threading_vtable;
+#define LOCK() TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_lock(&alloc_trace_mutex)))
+#define UNLOCK() TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_unlock(&alloc_trace_mutex)))
 
 #define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
 #define ALLOC_TRACE_MAX_PTRS (256)
@@ -104,14 +110,14 @@ static void *remove_ptr(char *user_ptr)
 void alloc_trace_init(void)
 {
 	int res;
-	res = fiber_mutex_init(&alloc_trace_mutex);
+	res = threading_vtable.mutex_init(&alloc_trace_mutex);
 	TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_destroy(void)
 {
 	int res;
-	res = fiber_mutex_destroy(&alloc_trace_mutex);
+	res = threading_vtable.mutex_destroy(&alloc_trace_mutex);
 	TEST_ASSERT_EQUAL(0, res);
 }
 
@@ -128,8 +134,8 @@ void alloc_trace_verify(void)
 	TEST_ASSERT_EQUAL_MESSAGE(
 		malloc_calls, free_calls,
 		"expected = malloc calls, actual = free calls");
-	TEST_ASSERT_EQUAL_MESSAGE(
-		0, count, "Encountered a memory leak in alloc_trace_verify");
+	TEST_ASSERT_EQUAL_MESSAGE(0, count,
+				  "Found a memory leak in alloc_trace_verify");
 }
 
 void alloc_trace_reset(malloc_function_t _mal, free_function_t _fr)
@@ -160,12 +166,12 @@ void *alloc_trace_malloc(size_t size)
          */
 	ptr = _malloc(size + MALLOC_PADDING_BYTES * 2);
 	user_ptr = (char *)ptr + MALLOC_PADDING_BYTES;
-	LOCK();
 	if (ptr != NULL) {
+		LOCK();
 		++malloc_calls;
 		insert_ptr((void *)user_ptr, size, MALLOC_PADDING_BYTES);
+		UNLOCK();
 	}
-	UNLOCK();
 	return user_ptr;
 }
 

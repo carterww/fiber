@@ -66,7 +66,9 @@ test_result_clean:
 	@find build/test/result -type f -exec rm {} +
 
 test_run: test_result_clean $(DIRS)
-	@find bin/test -type f -executable -print0 | xargs -0 -P 8 -I {} sh -c '{} > build/test/result/$$RANDOM.test' \;
+	@find bin/test -type f -executable -print0 | \
+		xargs -0 -P 8 -I {} \
+		sh -c '{} > build/test/result/$$RANDOM.test' \;
 	@wait
 	$(test_summary_cmd)
 

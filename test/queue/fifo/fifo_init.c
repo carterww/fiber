@@ -38,8 +38,10 @@ void test_fifo_init_valid(void)
 int main(void)
 {
 	UNITY_BEGIN();
+	alloc_trace_init();
 
 	RUN_TEST(test_fifo_init_valid);
 
+	alloc_trace_destroy();
 	return UNITY_END();
 }
