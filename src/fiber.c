@@ -67,7 +67,7 @@ struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts)
 	pool->queue_ops = NULL;
 	pool->job_queue = NULL;
 	pool->thread_head = NULL;
-	pool->threads_number = opts->threads_number;
+	pool->threads_number = 0;
 	pool->threads_working = 0;
 	pool->threads_kill_number = 0;
 	pool->fiber_wait_callers = 0;

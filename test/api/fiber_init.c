@@ -1,12 +1,15 @@
+#include <limits.h>
 #include <stdlib.h>
-
-#include "test/mock/alloc/alloc_trace.h"
-#include "test/mock/threading/threading_trace_fault.h"
-#include "test/unity.h"
 
 #include "fiber.h"
 #include "fiber_fifo.h"
+#include "src/atomic.h"
 #include "src/fiber_internal.h"
+
+#include "test/busy_wait.h"
+#include "test/mock/alloc/alloc_trace.h"
+#include "test/mock/threading/threading_trace_fault.h"
+#include "test/unity.h"
 
 /* All FBR_E* errors are negative. */
 #define FIBER_INIT_INVALID_ERROR (20)
@@ -41,10 +44,22 @@ static void init_opts_valid(struct fiber_pool_init_options *opts,
 static void validate_pool(struct fiber_pool *pool,
 			  struct fiber_pool_init_options *opts)
 {
+	tpsize curr_threads_number;
+	unsigned long i = 0;
+
 	TEST_ASSERT_NOT_NULL(pool);
 
 	TEST_ASSERT_EQUAL(-1, pool->job_id_prev);
-	TEST_ASSERT_EQUAL(opts->threads_number, pool->threads_number);
+	do {
+		curr_threads_number = atomic_load_tpsize(&pool->threads_number,
+							 FIBER_ATOMIC_ACQUIRE);
+		if (curr_threads_number == opts->threads_number) {
+			break;
+		}
+		mssleep_busy_wait(50);
+	} while (i++ < 30);
+	/* Wait at most 1.5 seconds for the value to be correct */
+	TEST_ASSERT_EQUAL(opts->threads_number, curr_threads_number);
 	TEST_ASSERT_EQUAL(0, pool->threads_working);
 	TEST_ASSERT_EQUAL(0, pool->threads_kill_number);
 	TEST_ASSERT_EQUAL(0, pool->fiber_wait_callers);

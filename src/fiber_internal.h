@@ -17,21 +17,21 @@
 struct fiber_thread {
 	struct fiber_thread *next;
 	tid thread_id;
-	jid job_id; /* Only LDR/STR this through atomic (RELAXED used right now) */
+	jid job_id; /* Only atomic LDR/STR (RELAXED used right now) */
 };
 
 /* A pool of threads and a job queue */
 struct fiber_pool {
 	fiber_mutex lock;
-	jid job_id_prev; /* Only LDR/STR this through atomic */
+	jid job_id_prev; /* Only atomic LDR/STR */
 	struct fiber_queue_operations *queue_ops;
 	void *job_queue;
-	struct fiber_thread *thread_head;
-	tpsize threads_number; /* Only LDR/STR this through atomic */
-	tpsize threads_working; /* Only LDR/STR this through atomic */
+	struct fiber_thread *thread_head; /* Guarded by pool's mutex */
+	tpsize threads_number; /* Only atomic LDR/STR */
+	tpsize threads_working; /* Only atomic LDR/STR */
 	fiber_semaphore threads_sync;
-	tpsize threads_kill_number; /* Only LDR/STR this through atomic */
-	tpsize fiber_wait_callers; /* Only LDR/STR this through atomic */
+	tpsize threads_kill_number; /* Only atomic LDR/STR */
+	tpsize fiber_wait_callers; /* Only atomic LDR/STR */
 	malloc_function_t malloc;
 	free_function_t free;
 };
