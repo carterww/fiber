@@ -3,7 +3,6 @@
 #include "fiber.h"
 #include "fiber_fifo.h"
 #include "fifo_validate.h"
-#include "src/queue/fifo_internal.h"
 
 #include "test/mock/alloc/alloc_trace.h"
 #include "test/mock/threading/threading_trace_fault.h"

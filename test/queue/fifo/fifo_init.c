@@ -1,13 +1,12 @@
 #include <stdlib.h>
 
-#include "test/unity.h"
-#include "test/mock/alloc/alloc_trace.h"
-#include "test/mock/threading/threading_trace_fault.h"
-
 #include "fiber.h"
 #include "fiber_fifo.h"
 #include "fifo_validate.h"
-#include "src/queue/fifo_internal.h"
+
+#include "test/unity.h"
+#include "test/mock/alloc/alloc_trace.h"
+#include "test/mock/threading/threading_trace_fault.h"
 
 static const qsize queue_length = 10;
 
