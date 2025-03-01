@@ -33,7 +33,7 @@ tpsize atomic_add_fetch_tpsize(tpsize *t, int val,
 	return __atomic_add_fetch(t, val, memorder);
 }
 
-tpsize atomic_load_tpsize(tpsize *t, enum fiber_atomic_memorder memorder)
+tpsize atomic_load_tpsize(const tpsize *t, enum fiber_atomic_memorder memorder)
 {
 	return __atomic_load_n(t, memorder);
 }
@@ -50,7 +50,7 @@ void atomic_store_jid(jid *j, jid val, enum fiber_atomic_memorder memorder)
 	__atomic_store_n(j, val, memorder);
 }
 
-jid atomic_load_jid(jid *j, enum fiber_atomic_memorder memorder)
+jid atomic_load_jid(const jid *j, enum fiber_atomic_memorder memorder)
 {
 	return __atomic_load_n(j, memorder);
 }

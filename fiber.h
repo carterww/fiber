@@ -13,7 +13,7 @@
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (6)
-#define FIBER_VERSION_PATCH (3)
+#define FIBER_VERSION_PATCH (4)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -55,7 +55,8 @@ struct fiber_queue_init_result {
 };
 
 /* Queue function typedefs */
-typedef int (*fiber_queue_push_function_t)(void *queue, struct fiber_job *job,
+typedef int (*fiber_queue_push_function_t)(void *queue,
+					   const struct fiber_job *job,
 					   unsigned long flags);
 typedef int (*fiber_queue_pop_function_t)(void *queue, struct fiber_job *buffer,
 					  unsigned long flags);
@@ -138,7 +139,7 @@ enum fiber_capability_option {
  * @error queue_ops.init -> An error from the queue initialization function. Check the
  * queue's header file to see which errors it returns.
  */
-struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts);
+struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts);
 
 /* Pushes a job onto the job queue.
  * @param pool -> The thread pool to add work to.
@@ -178,7 +179,7 @@ int fiber_wait(struct fiber_pool *pool);
  * @error FBR_EQUEOPS_NONE -> there is no "length" operation defined for the
  * queue.
  */
-qsize fiber_jobs_pending(struct fiber_pool *pool);
+qsize fiber_jobs_pending(const struct fiber_pool *pool);
 
 /* Remove threads_num threads from the pool. Threads that are currently
  * executing jobs will not be cancelled. Fiber does not know when these
@@ -218,7 +219,7 @@ int fiber_threads_add(struct fiber_pool *pool, tpsize threads_num);
  * a negative number representing an error.
  * @error FBR_ENULL_ARGS -> pool is NULL.
  */
-tpsize fiber_threads_number(struct fiber_pool *pool);
+tpsize fiber_threads_number(const struct fiber_pool *pool);
 
 /* Get the current number of threads currently running a user job.
  * @param pool -> The pool to check.
@@ -226,7 +227,7 @@ tpsize fiber_threads_number(struct fiber_pool *pool);
  * representing an error.
  * @error FBR_ENULL_ARGS -> pool is NULL.
  */
-tpsize fiber_threads_working(struct fiber_pool *pool);
+tpsize fiber_threads_working(const struct fiber_pool *pool);
 
 /* Get the version information of the library. This is useful if you
  * are compiling against an object file and the header may be

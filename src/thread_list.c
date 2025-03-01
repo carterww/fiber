@@ -53,7 +53,7 @@ void fiber_thread_list_add(struct fiber_thread **head, struct fiber_thread *new)
 }
 
 void fiber_thread_list_remove(struct fiber_thread **head,
-			      struct fiber_thread *thread)
+			      const struct fiber_thread *thread)
 {
 	struct fiber_thread *curr;
 	struct fiber_thread *prev;

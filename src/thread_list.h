@@ -44,6 +44,6 @@ void fiber_thread_list_add(struct fiber_thread **head,
  * @param thread -> The thread to remove from the list.
  */
 void fiber_thread_list_remove(struct fiber_thread **head,
-			      struct fiber_thread *thread);
+			      const struct fiber_thread *thread);
 
 #endif /* _FIBER_THREAD_LIST_H */

@@ -9,7 +9,8 @@
 #include "worker.h"
 
 /* Declared and defined in fiber.c */
-extern jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
+extern jid __fiber_job_push(const struct fiber_pool *pool,
+			    const struct fiber_job *job,
 			    unsigned long queue_flags);
 
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg);
@@ -23,10 +24,10 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 
 static int fiber_worker_handle_flags(struct fiber_pool *pool);
 static int
-fiber_worker_should_handle_flag_kill(struct fiber_pool *pool,
+fiber_worker_should_handle_flag_kill(const struct fiber_pool *pool,
 				     enum fiber_atomic_memorder load_memorder);
 static int
-fiber_worker_should_handle_flag_wait(struct fiber_pool *pool,
+fiber_worker_should_handle_flag_wait(const struct fiber_pool *pool,
 				     enum fiber_atomic_memorder load_memorder);
 static int fiber_worker_handle_flag_kill(struct fiber_pool *pool);
 static void fiber_worker_handle_flag_wait(struct fiber_pool *pool);
@@ -121,10 +122,10 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 	return NULL;
 }
 
-void fiber_workers_cancel(struct fiber_thread *threads_head,
+void fiber_workers_cancel(const struct fiber_thread *threads_head,
 			  tpsize threads_number)
 {
-	struct fiber_thread *curr;
+	const struct fiber_thread *curr;
 	tpsize i;
 
 	curr = threads_head;
@@ -151,7 +152,7 @@ void fiber_workers_cancel(struct fiber_thread *threads_head,
 	}
 }
 
-void fiber_worker_wake_other(struct fiber_pool *pool)
+void fiber_worker_wake_other(const struct fiber_pool *pool)
 {
 	int res;
 	static struct fiber_job wake_job = { FIBER_JID_MIN, fiber_wake_runner,
@@ -168,7 +169,7 @@ void fiber_worker_wake_other(struct fiber_pool *pool)
 	switch (res) {
 	case 0:
 		break;
-	/* Queue was full. If this is the case, another worker will evetually
+	/* Queue was full. If this is the case, another worker will eventually
          * wake up anyway.
          */
 	case FBR_EAGAIN:
@@ -310,7 +311,7 @@ static int fiber_worker_handle_flags(struct fiber_pool *pool)
 }
 
 static int
-fiber_worker_should_handle_flag_kill(struct fiber_pool *pool,
+fiber_worker_should_handle_flag_kill(const struct fiber_pool *pool,
 				     enum fiber_atomic_memorder load_memorder)
 {
 	tpsize to_kill;
@@ -320,7 +321,7 @@ fiber_worker_should_handle_flag_kill(struct fiber_pool *pool,
 }
 
 static int
-fiber_worker_should_handle_flag_wait(struct fiber_pool *pool,
+fiber_worker_should_handle_flag_wait(const struct fiber_pool *pool,
 				     enum fiber_atomic_memorder load_memorder)
 {
 	tpsize waiters;

@@ -57,7 +57,7 @@ tpsize atomic_sub_fetch_tpsize(tpsize *t, int val,
 tpsize atomic_add_fetch_tpsize(tpsize *t, int val,
 			       enum fiber_atomic_memorder memorder);
 
-tpsize atomic_load_tpsize(tpsize *t, enum fiber_atomic_memorder memorder);
+tpsize atomic_load_tpsize(const tpsize *t, enum fiber_atomic_memorder memorder);
 
 /** Job Id atomic ops **/
 
@@ -65,7 +65,7 @@ jid atomic_add_fetch_jid(jid *j, int val, enum fiber_atomic_memorder memorder);
 
 void atomic_store_jid(jid *j, jid val, enum fiber_atomic_memorder memorder);
 
-jid atomic_load_jid(jid *j, enum fiber_atomic_memorder memorder);
+jid atomic_load_jid(const jid *j, enum fiber_atomic_memorder memorder);
 
 /* This operation should compare the contents of j with the contents of expected.
  * If they are equal, it should perform an read-modify-write on j with the value

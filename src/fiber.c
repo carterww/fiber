@@ -22,7 +22,7 @@
  * in queue_flags.
  * @note worker.c uses this to push jobs with preset job ids
  */
-jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
+jid __fiber_job_push(const struct fiber_pool *pool, const struct fiber_job *job,
 		     unsigned long queue_flags);
 
 static int
@@ -40,7 +40,7 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 static void fiber_thread_pool_end_threads(const struct fiber_pool *pool,
 					  struct fiber_thread *thread_head);
 
-struct fiber_init_result fiber_init(struct fiber_pool_init_options *opts)
+struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 {
 	int mutex_res = 1;
 	int sem_res = 1;
@@ -189,7 +189,7 @@ int fiber_wait(struct fiber_pool *pool)
 	return 0;
 }
 
-qsize fiber_jobs_pending(struct fiber_pool *pool)
+qsize fiber_jobs_pending(const struct fiber_pool *pool)
 {
 	if (pool == NULL || pool->job_queue == NULL ||
 	    pool->queue_ops == NULL) {
@@ -264,7 +264,7 @@ workers_start_err:
 	return start_res;
 }
 
-tpsize fiber_threads_number(struct fiber_pool *pool)
+tpsize fiber_threads_number(const struct fiber_pool *pool)
 {
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
@@ -272,7 +272,7 @@ tpsize fiber_threads_number(struct fiber_pool *pool)
 	return atomic_load_tpsize(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
 }
 
-tpsize fiber_threads_working(struct fiber_pool *pool)
+tpsize fiber_threads_working(const struct fiber_pool *pool)
 {
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
@@ -280,7 +280,7 @@ tpsize fiber_threads_working(struct fiber_pool *pool)
 	return atomic_load_tpsize(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
 }
 
-jid __fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
+jid __fiber_job_push(const struct fiber_pool *pool, const struct fiber_job *job,
 		     unsigned long queue_flags)
 {
 	int push_res;

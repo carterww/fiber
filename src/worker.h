@@ -55,7 +55,7 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg);
  * @param threads_head -> The list of threads to cancel.
  * @param threads_number -> The maximum number of threads to cancel.
  */
-void fiber_workers_cancel(struct fiber_thread *threads_head,
+void fiber_workers_cancel(const struct fiber_thread *threads_head,
 			  tpsize threads_number);
 
 /* Pushes a job onto the queue to wake a sleeping thread. If no threads
@@ -64,6 +64,6 @@ void fiber_workers_cancel(struct fiber_thread *threads_head,
  * @note This function is only used to handle the case where the user wishes
  * to cancel threads but all of the threads are sleeping.
  */
-void fiber_worker_wake_other(struct fiber_pool *pool);
+void fiber_worker_wake_other(const struct fiber_pool *pool);
 
 #endif /* _FIBER_WORKER_H */

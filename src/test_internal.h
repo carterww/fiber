@@ -51,7 +51,8 @@ struct fiber_test_internal_capability {
 
 struct fiber_test_internal_fiber {
 	/* This one isn't static but it isn't in a header file */
-	jid (*__fiber_job_push)(struct fiber_pool *pool, struct fiber_job *job,
+	jid (*__fiber_job_push)(const struct fiber_pool *pool,
+				const struct fiber_job *job,
 				unsigned long queue_flags);
 	int (*fiber_validate_init_options)(
 		const struct fiber_pool_init_options *opts);
@@ -96,10 +97,10 @@ struct fiber_test_internal_worker {
 					 struct fiber_job *job);
 	int (*fiber_worker_handle_flags)(struct fiber_pool *pool);
 	int (*fiber_worker_should_handle_flag_kill)(
-		struct fiber_pool *pool,
+		const struct fiber_pool *pool,
 		enum fiber_atomic_memorder load_memorder);
 	int (*fiber_worker_should_handle_flag_wait)(
-		struct fiber_pool *pool,
+		const struct fiber_pool *pool,
 		enum fiber_atomic_memorder load_memorder);
 	int (*fiber_worker_handle_flag_kill)(struct fiber_pool *pool);
 	void (*fiber_worker_handle_flag_wait)(struct fiber_pool *pool);
