@@ -95,7 +95,6 @@ struct fiber_test_internal_worker {
 	void (*fiber_worker_execute_job)(struct fiber_pool *pool,
 					 struct fiber_thread *thread,
 					 struct fiber_job *job);
-	int (*fiber_worker_handle_flags)(struct fiber_pool *pool);
 	int (*fiber_worker_should_handle_flag_kill)(
 		const struct fiber_pool *pool,
 		enum fiber_atomic_memorder load_memorder);

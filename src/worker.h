@@ -33,14 +33,6 @@ int fiber_workers_start(struct fiber_pool *pool,
 			struct fiber_thread *threads_head,
 			tpsize threads_number);
 
-/* Starts a single thread.
- * @param arg -> The argument to pass to the runner function.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_ETHRD_LIMIT -> A new thread could not be created because the limit was reached.
- * This limit could be from a system policy, insufficient resources, etc.
- */
-int fiber_worker_start(struct fiber_worker_thread_arg *arg);
-
 /* Entry function for the new worker thread.
  * @param fiber_worker_thread_arg -> Struct of the type fiber_worker_thread_arg.
  * @returns -> Only returns if the user kills the thread.

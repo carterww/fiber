@@ -22,7 +22,6 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 				     struct fiber_thread *thread,
 				     struct fiber_job *job);
 
-static int fiber_worker_handle_flags(struct fiber_pool *pool);
 static int
 fiber_worker_should_handle_flag_kill(const struct fiber_pool *pool,
 				     enum fiber_atomic_memorder load_memorder);
@@ -55,7 +54,8 @@ int fiber_workers_start(struct fiber_pool *pool,
 		arg->thread->job_id = FBR_EINVLD_JOB;
 		arg->prev = prev;
 		prev = arg;
-		error_code = fiber_worker_start(arg);
+		error_code = fiber_thread_create(&arg->thread->thread_id,
+						 fiber_worker_runner, arg);
 		if (error_code != 0) {
 			goto err;
 		}
@@ -70,16 +70,6 @@ err:
 		pool->free(prev);
 		prev = saved;
 	}
-	return error_code;
-}
-
-int fiber_worker_start(struct fiber_worker_thread_arg *arg)
-{
-	int error_code = 0;
-
-	fiber_assert(arg != NULL);
-	error_code = fiber_thread_create(&arg->thread->thread_id,
-					 fiber_worker_runner, arg);
 	return error_code;
 }
 
@@ -257,7 +247,16 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 		/* Before calling pop and possibly falling asleep, handle any flags
                  * from pool.
                  */
-		should_exit = fiber_worker_handle_flags(pool);
+		should_exit = 0;
+		if (fiber_worker_should_handle_flag_wait(
+			    pool, FIBER_ATOMIC_ACQUIRE)) {
+			fiber_worker_handle_flag_wait(pool);
+		}
+		if (fiber_worker_should_handle_flag_kill(
+			    pool, FIBER_ATOMIC_ACQUIRE)) {
+			should_exit = should_exit ||
+				      fiber_worker_handle_flag_kill(pool);
+		}
 		if (should_exit) {
 			return;
 		}
@@ -293,21 +292,6 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 		}
 	} while (pool->queue_ops.pop(pool->job_queue, job,
 				     FIBER_QUEUE_NO_BLOCK) == 0);
-}
-
-static int fiber_worker_handle_flags(struct fiber_pool *pool)
-{
-	int should_exit = 0;
-
-	if (fiber_worker_should_handle_flag_wait(pool, FIBER_ATOMIC_ACQUIRE)) {
-		fiber_worker_handle_flag_wait(pool);
-	}
-	if (fiber_worker_should_handle_flag_kill(pool, FIBER_ATOMIC_ACQUIRE)) {
-		should_exit = should_exit ||
-			      fiber_worker_handle_flag_kill(pool);
-	}
-
-	return should_exit;
 }
 
 static int
@@ -395,7 +379,6 @@ struct fiber_test_internal_worker fiber_test_internal_worker = {
 	__fiber_worker_runner_cleanup,
 	fiber_worker_loop,
 	fiber_worker_execute_job,
-	fiber_worker_handle_flags,
 	fiber_worker_should_handle_flag_kill,
 	fiber_worker_should_handle_flag_wait,
 	fiber_worker_handle_flag_kill,
