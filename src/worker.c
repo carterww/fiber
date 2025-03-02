@@ -244,7 +244,7 @@ static void fiber_worker_loop(struct fiber_pool *pool,
                  */
 		atomic_store_jid(&thread->job_id, FBR_EINVLD_JOB,
 				 FIBER_ATOMIC_RELAXED);
-		queue_pop_res = pool->queue_ops->pop(
+		queue_pop_res = pool->queue_ops.pop(
 			pool->job_queue, &job_buffer, FIBER_QUEUE_BLOCK);
 		fiber_assert(queue_pop_res == 0);
 
@@ -291,8 +291,8 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 			    pool, FIBER_ATOMIC_RELAXED)) {
 			break;
 		}
-	} while (pool->queue_ops->pop(pool->job_queue, job,
-				      FIBER_QUEUE_NO_BLOCK) == 0);
+	} while (pool->queue_ops.pop(pool->job_queue, job,
+				     FIBER_QUEUE_NO_BLOCK) == 0);
 }
 
 static int fiber_worker_handle_flags(struct fiber_pool *pool)

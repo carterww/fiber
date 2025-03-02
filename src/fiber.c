@@ -64,7 +64,11 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 
 	/* Initialize primitive pool values */
 	pool->job_id_prev = -1;
-	pool->queue_ops = NULL;
+	pool->queue_ops.push = NULL;
+	pool->queue_ops.pop = NULL;
+	pool->queue_ops.init = NULL;
+	pool->queue_ops.free = NULL;
+	pool->queue_ops.length = NULL;
 	pool->job_queue = NULL;
 	pool->thread_head = NULL;
 	pool->threads_number = 0;
@@ -171,7 +175,7 @@ int fiber_wait(struct fiber_pool *pool)
          */
 	threads_working = atomic_load_tpsize(&pool->threads_working,
 					     FIBER_ATOMIC_ACQUIRE);
-	queue_length = pool->queue_ops->length(pool->job_queue);
+	queue_length = pool->queue_ops.length(pool->job_queue);
 	threads_number = atomic_load_tpsize(&pool->threads_working,
 					    FIBER_ATOMIC_ACQUIRE);
 
@@ -191,14 +195,13 @@ int fiber_wait(struct fiber_pool *pool)
 
 qsize fiber_jobs_pending(const struct fiber_pool *pool)
 {
-	if (pool == NULL || pool->job_queue == NULL ||
-	    pool->queue_ops == NULL) {
+	if (pool == NULL || pool->job_queue == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	if (pool->queue_ops->length == NULL) {
+	if (pool->queue_ops.length == NULL) {
 		return FBR_EQUEOPS_NONE;
 	}
-	return pool->queue_ops->length(pool->job_queue);
+	return pool->queue_ops.length(pool->job_queue);
 }
 
 int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
@@ -209,7 +212,7 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (threads_num < 1) {
 		return FBR_EINVLD_SIZE;
 	}
-	if (pool->queue_ops == NULL || pool->queue_ops->push == NULL) {
+	if (pool->queue_ops.push == NULL) {
 		return FBR_EPOOL_UNINIT;
 	}
 	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, threads_num,
@@ -285,8 +288,8 @@ jid __fiber_job_push(const struct fiber_pool *pool, const struct fiber_job *job,
 {
 	int push_res;
 
-	fiber_assert(pool->queue_ops != NULL && pool->queue_ops->push != NULL);
-	push_res = pool->queue_ops->push(pool->job_queue, job, queue_flags);
+	fiber_assert(pool->queue_ops.push != NULL);
+	push_res = pool->queue_ops.push(pool->job_queue, job, queue_flags);
 	switch (push_res) {
 	case 0:
 		break;
@@ -340,15 +343,11 @@ static int fiber_init_queue(struct fiber_pool *pool,
 
 	ops = opts->queue_ops;
 
-	pool->queue_ops = opts->malloc(sizeof(*pool->queue_ops));
-	if (pool->queue_ops == NULL) {
-		return FBR_ENOMEM;
-	}
-	pool->queue_ops->push = ops->push;
-	pool->queue_ops->pop = ops->pop;
-	pool->queue_ops->init = ops->init;
-	pool->queue_ops->free = ops->free;
-	pool->queue_ops->length = ops->length;
+	pool->queue_ops.push = ops->push;
+	pool->queue_ops.pop = ops->pop;
+	pool->queue_ops.init = ops->init;
+	pool->queue_ops.free = ops->free;
+	pool->queue_ops.length = ops->length;
 
 	queue_init_res =
 		ops->init(opts->queue_length, opts->malloc, opts->free);
@@ -367,13 +366,9 @@ static void fiber_free_queue(struct fiber_pool *pool)
 	}
 
 	fiber_assert(pool->free != NULL);
-	if (pool->job_queue != NULL) {
-		fiber_assert(pool->queue_ops->free != NULL);
-		pool->queue_ops->free(pool->job_queue);
-	}
-	if (pool->queue_ops != NULL) {
-		pool->free(pool->queue_ops);
-	}
+	/* If job_queue is not NULL free should be set */
+	fiber_assert(pool->queue_ops.free != NULL);
+	pool->queue_ops.free(pool->job_queue);
 }
 
 static jid fiber_fetch_next_jid(jid *job_id_prev)

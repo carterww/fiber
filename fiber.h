@@ -112,7 +112,7 @@ enum fiber_capability_option {
  * starting each thread. After fiber_init returns successfully, threads will
  * be awaiting work. Do not initialize a pool that has already been initialized.
  * @param opts -> A struct of params and options to initialize the new pool.
- *   queue_ops:     A struct which holds the queue implementation functions.
+ *  queue_ops:      A struct which holds the queue implementation functions.
  *                  Fiber copies the data from the struct.
  *  malloc:         The allocator you would like Fiber to use.
  *  free:           The free functions corresponding to malloc.
@@ -175,7 +175,7 @@ int fiber_wait(struct fiber_pool *pool);
 /* Get the number of jobs currently waiting to be executed in the job queue.
  * @param pool -> The pool which contains the job queue to check.
  * @returns -> The number of jobs waiting in the queue.
- * @error FBR_ENULL_ARGS -> pool, pool->job_queue, or pool->queue_ops is NULL.
+ * @error FBR_ENULL_ARGS -> pool or pool->job_queue is NULL.
  * @error FBR_EQUEOPS_NONE -> there is no "length" operation defined for the
  * queue.
  */
