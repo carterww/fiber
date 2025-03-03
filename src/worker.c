@@ -112,33 +112,55 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 	return NULL;
 }
 
-void fiber_workers_cancel(const struct fiber_thread *threads_head,
+void fiber_workers_cancel(const struct fiber_pool *pool,
+			  const struct fiber_thread *threads_head,
 			  tpsize threads_number)
 {
 	const struct fiber_thread *curr;
+	tid *tid_list;
+	tpsize count;
 	tpsize i;
 
 	curr = threads_head;
-	i = 0;
-	while (curr != NULL && i < threads_number) {
-		struct fiber_thread *next;
-		int res;
-		tid curr_tid;
+	/* threads_number is a limit, not an exact number. */
+	for (count = 0; count < threads_number && curr != NULL; ++count) {
+		curr = curr->next;
+	}
+	/* Attempt to malloc memory to cache the thread ids. After canceling
+         * the threads the current fiber_thread struct cannot be used because the
+         * thread may free it at any time.
+         */
+	tid_list = pool->malloc(count * sizeof(*tid_list));
+	curr = threads_head;
+	/* If malloc fails here we do it the slower way */
+	if (tid_list == NULL) {
+		for (i = 0; i < count; ++i) {
+			int res;
+			tid tmp;
 
-		/* Canceling and joining like this is inefficient but it
-                 * avoids needing to malloc an array to store thread_ids.
-                 * When the thread cleans up after itself, it frees the fiber_thread
-                 * struct. We need to store the thread id in order to join.
-                 */
-		curr_tid = curr->thread_id;
-		next = curr->next;
-		/* Don't access curr after this point */
-		res = fiber_thread_cancel(&curr_tid);
-		fiber_assert(res == 0);
-		res = fiber_thread_join(&curr_tid, NULL);
-		fiber_assert(res == 0);
-		curr = next;
-		++i;
+			tmp = curr->thread_id;
+			curr = curr->next;
+			res = fiber_thread_cancel(&tmp);
+			fiber_assert(res == 0);
+			res = fiber_thread_join(&tmp, NULL);
+			fiber_assert(res == 0);
+		}
+		return;
+	} else {
+		/* With 32 threads this method was about 4x faster */
+		for (i = 0; i < count; ++i) {
+			int res;
+
+			tid_list[i] = curr->thread_id;
+			curr = curr->next;
+			res = fiber_thread_cancel(&tid_list[i]);
+			fiber_assert(res == 0);
+		}
+		for (i = 0; i < count; ++i) {
+			int res = fiber_thread_join(&tid_list[i], NULL);
+			fiber_assert(res == 0);
+		}
+		pool->free(tid_list);
 	}
 }
 

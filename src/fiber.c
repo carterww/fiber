@@ -36,9 +36,6 @@ static jid fiber_fetch_next_jid(jid *job_id_prev);
 
 static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 					   tpsize threads_number);
-/* When freeing the pool, call this first. */
-static void fiber_thread_pool_end_threads(const struct fiber_pool *pool,
-					  struct fiber_thread *thread_head);
 
 struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 {
@@ -107,9 +104,12 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 	fiber_assert(res.error == 0);
 	res.pool = pool;
 	return res;
-err:
+err: {
 	/* Cleans up after fiber_thread_pool_start_threads */
-	fiber_thread_pool_end_threads(pool, pool->thread_head);
+	if (pool->thread_head != NULL) {
+		fiber_workers_cancel(pool, pool->thread_head,
+				     opts->threads_number);
+	}
 	/* Cleans up after fiber_init_queue */
 	fiber_free_queue(pool);
 
@@ -122,7 +122,9 @@ err:
 		int des_res = fiber_sem_destroy(&pool->threads_sync);
 		fiber_assert(des_res == 0);
 	}
+	pool->free(pool);
 	return res;
+}
 }
 
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
@@ -142,7 +144,9 @@ void fiber_free(struct fiber_pool *pool)
 	if (pool == NULL || pool->free == NULL) {
 		return;
 	}
-	fiber_thread_pool_end_threads(pool, pool->thread_head);
+	if (pool->thread_head != NULL) {
+		fiber_workers_cancel(pool, pool->thread_head, FIBER_TPSIZE_MAX);
+	}
 	/* If queue_ops is not NULL, some of the queue was initialized. This function
          * can figure out what parts to free/cleanup.
          */
@@ -263,7 +267,9 @@ workers_start_err:
 	/* Failed to start workers. Need to cancel any that were started and free the
          * thread_list we just alloated. This function does both.
          */
-	fiber_thread_pool_end_threads(pool, thread_list_result.threads_head);
+	if (pool->thread_head != NULL) {
+		fiber_workers_cancel(pool, pool->thread_head, FIBER_TPSIZE_MAX);
+	}
 	return start_res;
 }
 
@@ -421,24 +427,11 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 	return 0;
 }
 
-static void fiber_thread_pool_end_threads(const struct fiber_pool *pool,
-					  struct fiber_thread *thread_head)
-{
-	if (thread_head != NULL) {
-		fiber_assert(pool->free != NULL);
-		fiber_workers_cancel(thread_head, FIBER_TPSIZE_MAX);
-	}
-}
-
 #if defined(FIBER_BUILD_ENV_TEST)
 #include "test_internal.h"
 struct fiber_test_internal_fiber fiber_test_internal_fiber = {
-	__fiber_job_push,
-	fiber_validate_init_options,
-	fiber_init_queue,
-	fiber_free_queue,
-	fiber_fetch_next_jid,
-	fiber_thread_pool_start_threads,
-	fiber_thread_pool_end_threads
+	__fiber_job_push,     fiber_validate_init_options,
+	fiber_init_queue,     fiber_free_queue,
+	fiber_fetch_next_jid, fiber_thread_pool_start_threads,
 };
 #endif /* FIBER_BUILD_ENV_TEST */

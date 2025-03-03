@@ -9,6 +9,9 @@ else ifeq ($(ENV),debug)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG" -g
 else ifeq ($(ENV),test)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST" -g
+else ifeq ($(ENV),xray)
+	CC=clang
+	C_CONFIG_FLAGS+=-g -fxray-instrument -fxray-instruction-threshold=1
 else
 	$(error ENV was invalid.)
 endif

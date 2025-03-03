@@ -39,15 +39,16 @@ int fiber_workers_start(struct fiber_pool *pool,
  */
 void *fiber_worker_runner(void *fiber_worker_thread_arg);
 
-/* Cancels threads_number of threads. The threads are not immediately canceled, but
- * they will be canceled when possible. This function will return only after all the
+/* Cancels threads_number of threads. This function will return only after all the
  * threads are canceled.
  * Important note: This should only be used for sets of threads that were either never
  * added to the pool or make up the entire pool.
+ * @param pool -> The pool to cancel worker threads in.
  * @param threads_head -> The list of threads to cancel.
  * @param threads_number -> The maximum number of threads to cancel.
  */
-void fiber_workers_cancel(const struct fiber_thread *threads_head,
+void fiber_workers_cancel(const struct fiber_pool *pool,
+			  const struct fiber_thread *threads_head,
 			  tpsize threads_number);
 
 /* Pushes a job onto the queue to wake a sleeping thread. If no threads

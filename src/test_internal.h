@@ -65,8 +65,6 @@ struct fiber_test_internal_fiber {
 
 	int (*fiber_thread_pool_start_threads)(struct fiber_pool *pool,
 					       tpsize threads_number);
-	void (*fiber_thread_pool_end_threads)(const struct fiber_pool *pool,
-					      struct fiber_thread *thread_head);
 };
 
 struct fiber_test_internal_queue_fifo {

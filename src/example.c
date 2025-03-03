@@ -86,13 +86,13 @@ int main(void)
 
 		start = time_usec_now();
 		for (j = 0; j < jobs_push_num; ++j) {
-                        /* Create the job that Fiber should execute. Fiber will
+			/* Create the job that Fiber should execute. Fiber will
                          * copy the job into its own data structures and assign
                          * it a Job Id.
                          */
 			struct fiber_job job = { 0, fib_runner, NULL };
 
-                        /* Here we push the job onto the job queue and get its
+			/* Here we push the job onto the job queue and get its
                          * job id. A Job Id < 0 indicates an error. See the comment
                          * above fiber_job_push in fiber.h for possible errors.
                          */
@@ -103,8 +103,8 @@ int main(void)
 				return 1;
 			}
 		}
-                
-                /* fiber_wait allows the caller to block until all jobs
+
+		/* fiber_wait allows the caller to block until all jobs
                  * in the pool have finished. Be very careful when calling
                  * this if other threads or jobs can push jobs.
                  */
@@ -115,7 +115,7 @@ int main(void)
 		pretty_print_result(threads_num[i], end - start);
 	}
 
-        /* This will cancel all the threads and free the pool's other
+	/* This will cancel all the threads and free the pool's other
          * resources.
          */
 	fiber_free(pool);
@@ -136,13 +136,13 @@ static int example_compatible_fiber(void)
 	int fifo_capable;
 	int version_compatible;
 
-        /* fiber_capability_get allows the program to check if a certain feature
+	/* fiber_capability_get allows the program to check if a certain feature
          * was compiled into the Fiber. In this case, we are checking if the queue
          * implementation we'd like to use is available.
          */
 	fifo_capable = fiber_capability_get(FIBER_CAPABILITY_FIBER_FIFO_QUEUE);
 
-        /* fiber_libversion_compatible allows the program to check if the compiled
+	/* fiber_libversion_compatible allows the program to check if the compiled
          * version of Fiber is compatible with the version specified in fiber.h.
          */
 	version_compatible = fiber_libversion_compatible();
@@ -152,11 +152,11 @@ static int example_compatible_fiber(void)
 
 static struct fiber_pool *pool_init(tpsize threads_num, qsize queue_length)
 {
-        struct fiber_pool_init_options pool_opts;
-        struct fiber_queue_operations queue_ops = FIBER_FIFO_QUEUE_OPERATIONS;
+	struct fiber_pool_init_options pool_opts;
+	struct fiber_queue_operations queue_ops = FIBER_FIFO_QUEUE_OPERATIONS;
 	struct fiber_init_result init_res;
 
-        /* Specify the options for creating a new pool. See the comment
+	/* Specify the options for creating a new pool. See the comment
          * above fiber_init in fiber.h for an explanation of each.
          */
 	pool_opts.queue_ops = &queue_ops;
