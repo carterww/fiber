@@ -7,7 +7,7 @@ C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal \
 		  -Wnull-dereference -Wmissing-include-dirs -Wswitch-default \
 		  -Wswitch-enum
 C_PEDANTIC_FLAGS = -Wpedantic
-C_FLAGS = -I. -O2 -std=c89 $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS)
+C_FLAGS = -I. -std=c89 $(C_OPT_FLAGS) $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS)
 
 Q = @
 

@@ -18,7 +18,7 @@
 
 #define FIBER_JOB_QUEUE_LENGTH (1024)
 static const int fib_to = 100000;
-static const int jobs_push_num = FIBER_JOB_QUEUE_LENGTH * 16;
+static const qsize jobs_push_num = FIBER_JOB_QUEUE_LENGTH * 16;
 /* Must be in increasing order */
 static const tpsize threads_num[] = { 1, 2, 4, 8, 16, 32 };
 static const unsigned long threads_num_len =
@@ -72,7 +72,7 @@ int main(void)
 	pool = pool_init(threads_num[0], FIBER_JOB_QUEUE_LENGTH);
 
 	for (i = 0; i < threads_num_len; ++i) {
-		unsigned long j;
+		qsize j;
 		suseconds_t start, end;
 		/* Add threads to pool for next run */
 		if (i != 0) {

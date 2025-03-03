@@ -1,5 +1,6 @@
 # Boring options
 CC = cc
+C_OPT_FLAGS = -O2
 TARGET = fiber
 # This can be one of the following:
 # norm: Default build that should be used for production.

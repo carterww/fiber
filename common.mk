@@ -5,6 +5,7 @@ QUEUE_OBJS =
 ifeq ($(ENV),norm)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_NORM"
 else ifeq ($(ENV),debug)
+	C_OPT_FLAGS = -O0
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG" -g
 else ifeq ($(ENV),test)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST" -g
