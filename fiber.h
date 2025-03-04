@@ -172,8 +172,8 @@ jid fiber_job_push_raw(const struct fiber_pool *pool,
 		       const struct fiber_job *job, unsigned long queue_flags);
 
 /* Frees the resources allocated by the pool. If you care about the work
- * being done by the threads in the pool, fiber_wait should be called to
- * ensure all jobs have finished. Calling this function may cancel a thread
+ * being done by the threads in the pool, fiber_wait should be called first
+ * to ensure all jobs have finished. Calling this function may cancel a thread
  * while it is doing a job.
  * @param pool -> The thread pool to free.
  */

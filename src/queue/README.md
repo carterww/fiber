@@ -23,21 +23,24 @@ A queue's VTable is made up of 5 functions:
 ## Implementation Requirements
 As stated previously, Fiber expects certain behavior from a queue. If all these
 requirements are met, your queue should seamlessly integrate into Fiber.
-- *push* and *pop* should not use the most significant bit in *flags*. This bit
-  is already used to indicate the function should block.
-   - Any of the other bits can be used to define custom behavior.
+- *push* and *pop* should not use bits 24-31 in the flags. Only one is currently
+  used but the others are reserved for future additions.
+   - Bits 0-23 can be used for any custom behavior.
 - *push* and *pop* MUST respect the FIBER_QUEUE_BLOCK flag. If this flag is set,
   the function should block until the operation can be completed. If it is not set,
-  it should return an error if the operation cannot be completed immediately.
+  it should return FBR_EAGAIN if the operation cannot be completed immediately.
    - For *push*, this means it should block until the job is pushed onto the queue.
-   - For *pop*, this means it should block until a job is available to pop off.
+   - For *pop*, this means it should block until a job is available to remove and
+     execute.
       - Blocking on *pop* is especially useful because it allows the thread to sleep
         until a job is ready (if blocking = sleeping).
-- *push* and *pop* should return FBR_EAGAIN if the block flag is not set
-  and the operation cannot be completed immediately.
 - If the function returns an int, a 0 value should be returned to indicate a success
   and a non-zero should be returned to indicate an error. An error value defined in
   fiber.h is preferred, but you can define custom errors that do not conflict with those.
+- *pop* should only return an error if FIBER_QUEUE_BLOCK is not supplied and the operation
+  cannot be completed.
+- *push* can return a custom error that will be returned by fiber_job_push or
+  fiber_job_push_raw.
 - *push* must copy the contents of the job into its own data structure(s). It should not
   store a reference to the job argument in any way.
 
@@ -50,7 +53,7 @@ used as a shared object file).
 ### Build System
 In order to add your queue to the build follow these steps:
 1. Add a new boolean option to config.mk with the name COMPILE_FIBER_\[QUEUE_NAME\]_QUEUE.
-2. Add an "ifeq" check in common.mk that adds queue/\[QUEUE_NAME\].o to QUEUE_OBJS if the
+2. Add an "ifeq" check in common.mk that adds src/queue/\[QUEUE_NAME\].o to QUEUE_OBJS if the
    option defined in config.mk is true.
 
 The steps above will ensure your queue is compiled into Fiber's final binary, but it will

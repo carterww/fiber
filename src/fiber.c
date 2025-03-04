@@ -136,12 +136,9 @@ jid fiber_job_push_raw(const struct fiber_pool *pool,
 	switch (push_res) {
 	case 0:
 		break;
-	case FBR_EPUSH_JOB:
-	case FBR_EAGAIN:
+	default:
 		fiber_assert(push_res < 0);
 		return push_res;
-	default:
-		panic(1);
 	}
 	return job->job_id;
 }

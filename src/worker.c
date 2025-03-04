@@ -124,6 +124,10 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
 	/* Attempt to malloc memory to cache the thread ids. After canceling
          * the threads the current fiber_thread struct cannot be used because the
          * thread may free it at any time.
+         *
+         * This is much faster, but I don't like the idea of allocating memory
+         * in fiber_free. That seems like odd behavior for a library, even if
+         * it is in the name of performance.
          */
 	tid_list = pool->malloc(count * sizeof(*tid_list));
 	curr = threads_head;
