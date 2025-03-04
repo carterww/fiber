@@ -8,11 +8,6 @@
 #include "utils.h"
 #include "worker.h"
 
-/* Declared and defined in fiber.c */
-extern jid __fiber_job_push(const struct fiber_pool *pool,
-			    const struct fiber_job *job,
-			    unsigned long queue_flags);
-
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg);
 static void __fiber_worker_runner_cleanup(struct fiber_worker_thread_arg *arg);
 
@@ -177,7 +172,7 @@ void fiber_worker_wake_other(const struct fiber_pool *pool)
 	/* Put a job onto the queue whose sole purpose is to wake up
 	 * a thread and allow it to handle the flags we just set.
          */
-	res = __fiber_job_push(pool, &wake_job, FIBER_QUEUE_NO_BLOCK);
+	res = fiber_job_push_raw(pool, &wake_job, FIBER_QUEUE_NO_BLOCK);
 	switch (res) {
 	case 0:
 		break;

@@ -10,21 +10,6 @@
 #include "utils.h"
 #include "worker.h"
 
-/* Helper function associated with fiber_job_push. It only pushes the job to the
- * queue and returns the job id. Unlike fiber_job_push, it does not set the job
- * id.
- * @param pool -> Pool to push the job to.
- * @param job -> The job to push. It should already have the members set.
- * @param queue_flags -> Flags to pass to the job queue's push function.
- * @returns -> Either a valid job id (0 or more) or an error.
- * @error FBR_EPUSH_JOB -> A generic error returned by the queue push function.
- * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
- * in queue_flags.
- * @note worker.c uses this to push jobs with preset job ids
- */
-jid __fiber_job_push(const struct fiber_pool *pool, const struct fiber_job *job,
-		     unsigned long queue_flags);
-
 static int
 fiber_validate_init_options(const struct fiber_pool_init_options *opts);
 
@@ -134,7 +119,31 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		return FBR_ENULL_ARGS;
 	}
 	job->job_id = fiber_fetch_next_jid(&pool->job_id_prev);
-	return __fiber_job_push(pool, job, queue_flags);
+	return fiber_job_push_raw(pool, job, queue_flags);
+}
+
+jid fiber_job_push_raw(const struct fiber_pool *pool,
+		       const struct fiber_job *job, unsigned long queue_flags)
+{
+	int push_res;
+
+	if (pool == NULL || job == NULL || job->job_func == NULL) {
+		return FBR_ENULL_ARGS;
+	}
+
+	fiber_assert(pool->queue_ops.push != NULL);
+	push_res = pool->queue_ops.push(pool->job_queue, job, queue_flags);
+	switch (push_res) {
+	case 0:
+		break;
+	case FBR_EPUSH_JOB:
+	case FBR_EAGAIN:
+		fiber_assert(push_res < 0);
+		return push_res;
+	default:
+		panic(1);
+	}
+	return job->job_id;
 }
 
 void fiber_free(struct fiber_pool *pool)
@@ -289,26 +298,6 @@ tpsize fiber_threads_working(const struct fiber_pool *pool)
 	return atomic_load_tpsize(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
 }
 
-jid __fiber_job_push(const struct fiber_pool *pool, const struct fiber_job *job,
-		     unsigned long queue_flags)
-{
-	int push_res;
-
-	fiber_assert(pool->queue_ops.push != NULL);
-	push_res = pool->queue_ops.push(pool->job_queue, job, queue_flags);
-	switch (push_res) {
-	case 0:
-		break;
-	case FBR_EPUSH_JOB:
-	case FBR_EAGAIN:
-		fiber_assert(push_res < 0);
-		return push_res;
-	default:
-		panic(1);
-	}
-	return job->job_id;
-}
-
 static int
 fiber_validate_init_options(const struct fiber_pool_init_options *opts)
 {
@@ -430,8 +419,10 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 #if defined(FIBER_BUILD_ENV_TEST)
 #include "test_internal.h"
 struct fiber_test_internal_fiber fiber_test_internal_fiber = {
-	__fiber_job_push,     fiber_validate_init_options,
-	fiber_init_queue,     fiber_free_queue,
-	fiber_fetch_next_jid, fiber_thread_pool_start_threads,
+	fiber_validate_init_options,
+	fiber_init_queue,
+	fiber_free_queue,
+	fiber_fetch_next_jid,
+	fiber_thread_pool_start_threads,
 };
 #endif /* FIBER_BUILD_ENV_TEST */

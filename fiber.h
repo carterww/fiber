@@ -12,8 +12,8 @@
  */
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
-#define FIBER_VERSION_MINOR (6)
-#define FIBER_VERSION_PATCH (4)
+#define FIBER_VERSION_MINOR (2)
+#define FIBER_VERSION_PATCH (0)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -141,7 +141,7 @@ enum fiber_capability_option {
  */
 struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts);
 
-/* Pushes a job onto the job queue.
+/* Pushes a job onto the job queue and assigns it an ID.
  * @param pool -> The thread pool to add work to.
  * @param job -> The job to push. A job_id will be assigned by Fiber.
  * @param queue_flags -> Flags to pass to the queue push function. Every
@@ -149,13 +149,27 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts);
  * A custom implementation may have other flags.
  * @returns: 0 on success, an error otherwise.
  * @error FBR_ENULL_ARGS -> pool, job, or job_func are NULL.
- * @error FBR_EPUSH_JOB -> The queue implementation's push function
+ * @error FBR_EPUSH_JOB -> A generic error returned by the queue push function.
  * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
  * in queue_flags.
- * returned an error.
  */
 jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 		   unsigned long queue_flags);
+
+/* Pushes a job onto the job queue but does not assign it an ID. This function
+ * can be used if you already use an integer type >= 0 to identify your jobs.
+ * @param pool -> Pool to push the job to.
+ * @param job -> The job to push. It should have a unique number >= 0 in the
+ * job_id member.
+ * @param queue_flags -> Flags to pass to the job queue's push function.
+ * @returns -> Your job's ID or < 0 on error.
+ * @error FBR_ENULL_ARGS -> pool, job, or job_func are NULL.
+ * @error FBR_EPUSH_JOB -> A generic error returned by the queue push function.
+ * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
+ * in queue_flags.
+ */
+jid fiber_job_push_raw(const struct fiber_pool *pool,
+		       const struct fiber_job *job, unsigned long queue_flags);
 
 /* Frees the resources allocated by the pool. If you care about the work
  * being done by the threads in the pool, fiber_wait should be called to

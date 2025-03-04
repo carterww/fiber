@@ -50,10 +50,6 @@ struct fiber_test_internal_capability {
 };
 
 struct fiber_test_internal_fiber {
-	/* This one isn't static but it isn't in a header file */
-	jid (*__fiber_job_push)(const struct fiber_pool *pool,
-				const struct fiber_job *job,
-				unsigned long queue_flags);
 	int (*fiber_validate_init_options)(
 		const struct fiber_pool_init_options *opts);
 
