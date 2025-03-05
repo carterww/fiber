@@ -1,15 +1,15 @@
 # Fiber
 Fiber is a thread pool library built on top of POSIX Threads (pthreads) API. Even though it
-only supports pthreads right now, it can be ported to use other threading APIs somewhat
+only supports pthreads right now, it can be modified to use other threading APIs somewhat
 easily.
 
 ## API
-Each function that makes up Fiber's API is provided in [fiber.h](fiber.h). Each
+Each function that makes up Fiber's API can be found in [fiber.h](fiber.h). Each
 function has a comment above its prototype describing its behavior, parameters, and
 return value.
 
-[fiber.h](fiber.h) does not provide prototypes for queue functions.
-Each function's behavior is thoroughly documented in [fiber.h](fiber.h).
+fiber.h does not provide prototypes for queue functions. These will be
+found in separte header file(s).
 
 ## Writing a Custom Job Queue
 Fiber provides a default [job queue implementation](fiber_fifo.h) that should fulfil most needs,
@@ -20,7 +20,7 @@ your own job queue for fiber, please read the [requirements](src/queue/README.md
 Some of Fiber's selling points include:
 1. A simple and straightforward interface.
 2. Ability to provide custom memory allocators.
-3. No hidden memory allocations.
+3. No hidden memory allocation.
 4. Ability to select a job queue implementation at initialization.
 5. Support for adding and removing threads after initialization.
 6. Minimal lock contention and small critical sections.
@@ -32,25 +32,24 @@ clear and concise with adequate documentation.
 
 ### Custom Memory Allocators
 fiber_init takes function pointers to malloc and free that are used by the pool and queue.
-Allowing a user to use custom allocators has the following benefits:
-1. In environments with limited resources or lower latency requirements, libc's general purpose
-   allocator may be too beefy.
-2. A user can implement a simple allocator to manage a static buffer just for Fiber.
-   Doing so can ensure Fiber's memory usage stays below a certain amount.
+Allowing the user to provide custom allocators has the following benefits:
+1. It does not force the user to use libc's malloc and free.
+2. A pool's memory can be allocated from a static buffer to ensure Fiber remains within
+   memory constraints.
 
-Using libc's malloc and free is probably okay in 95% of use cases, but the use of custom
-memory allocators provides flexibility.
+Using libc's malloc and free is probably okay in 95% of use cases, but the option to use custom
+memory allocators gives the user flexibility.
 
 ### No Hidden Memory Allocations
-Fiber's background threads never allocate memory (unless job it's running does). Only these function
+Fiber's background threads never allocate memory (unless the job it's running does). Only these function
 calls will allocate memory:
-1. **fiber_init**: Allocates memory for the pool, queue, linked list of threads, and thread 
+1. **fiber_init**: Allocates memory for the pool, queue, linked list of threads, and each thread's
    arguments.
-2. **fiber_threads_add**: Allocates memory for the linked list of new threads and thread arguments.
+2. **fiber_threads_add**: Allocates memory for the linked list of new threads and each thread's arguments.
 3. **fiber_job_push and fiber_job_push_raw**: This may or may not allocate memory depending on
    the queue implementation. The default FIFO queue does not allocate memory after initialization, but
    I list these functions here just in case your queue does.
-4. **fiber_free**: This may seem weird but allocating a temporary list of thread ids when canceling
+4. **fiber_free**: This may seem weird but allocating a temporary list for thread IDs when canceling
    and joining threads results in a 3-4x speedup of fiber_free. I'm not sure if this is worth it.
 
 Hidden memory allocation may be a problem if your application has somewhat strict latency requirements.
@@ -58,7 +57,7 @@ Hidden memory allocation may be a problem if your application has somewhat stric
 ### Job Queue Selection
 Fiber only has one job queue implementation right now, but I plan to add at least one more. Beyond the
 job queues provided by Fiber, a user can easily implement their own and use it alongside the provided
-queue (see [how to do so](src/queue/README.md)).
+queue (see [how](src/queue/README.md)).
 
 ### Adding/Removing Threads After Initialization
 Threads can be added and removed from the pool after initialization. This allows a pool to be
@@ -73,19 +72,20 @@ Locks are used in two places:
 The first case is very rare: it only affects dynamic thread scaling and thread cleanup
 routines. The second case is very common, but the critical section is made up of a load,
 store, addition, and modulo. There is also an implicit memory barrier on either side of
-that sequence so the cost is greater than it may appear, but this is still very short.
+that sequence so the cost is greater than it may appear.
 
 Fiber heavily relies on atomic operations instead of locks for frequently accessed/updated
 variables. This is usually faster, but it comes with a major downside: these variables can't
-be trusted after a load. To see a prime example of this, read the code and comments for
-fiber_wait in [fiber.c](src/fiber.c).
+be trusted after loading them. To see a prime example of this, read the code and comments for
+[fiber_wait](src/fiber.c).
 
-My goal is to write a lock free queue for Fiber after testing to eliminate (2).
+My goal is to write a lock free queue for Fiber after testing to eliminate the second case
+listed above.
 
 ### Designed for Portability
-Fiber is written in C89 and the source attempts to stick to at. Calls to nonstandard
+Fiber is written in C89 and the source attempts to stick to it. Calls to nonstandard
 functions are hidden in files that can be swapped out at build time like
-[atomic_gcc_clang.c](src/atomic_gcc_clang.c) and [threading_pthread](src/threading_pthread.c).
+[atomic_gcc_clang.c](src/atomic_gcc_clang.c) and [threading_pthread.c](src/threading_pthread.c).
 The former hides builtin atomic functions behind an interface, and the latter hides
 mutex, semaphore, and pthread threading functions behind an interface.
 
