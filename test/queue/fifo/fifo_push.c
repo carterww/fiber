@@ -1,10 +1,9 @@
-#include "src/threading.h"
-#include "test/queue/fifo/fifo_validate.h"
 #include <stdlib.h>
 
 #include "fiber.h"
 #include "fiber_fifo.h"
 #include "src/queue/fifo_internal.h"
+#include "src/threading.h"
 
 #include "test/mock/alloc/alloc_trace.h"
 #include "test/mock/threading/threading_trace_fault.h"
