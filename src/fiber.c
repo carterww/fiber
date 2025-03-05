@@ -127,11 +127,11 @@ jid fiber_job_push_raw(const struct fiber_pool *pool,
 {
 	int push_res;
 
-	if (pool == NULL || job == NULL || job->job_func == NULL) {
+	if (pool == NULL || job == NULL || job->job_func == NULL ||
+	    pool->queue_ops.push == NULL) {
 		return FBR_ENULL_ARGS;
 	}
 
-	fiber_assert(pool->queue_ops.push != NULL);
 	push_res = pool->queue_ops.push(pool->job_queue, job, queue_flags);
 	switch (push_res) {
 	case 0:
