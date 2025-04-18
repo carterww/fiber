@@ -77,12 +77,12 @@ int fiber_capability_get(enum fiber_capability_option opt)
                 return 0;
         }
 
-        idx = ((unsigned int)opt) / 8;
-        shift = ((unsigned int)opt) % 8;
+        idx = ((unsigned int)opt) / 8U;
+        shift = ((unsigned int)opt) % 8U;
 
         fiber_assert(idx < sizeof(capability_bitstring));
 
-        return capability_bitstring[idx] & (1 << shift);
+        return capability_bitstring[idx] & ((unsigned char)1 << shift);
 }
 
 #undef FIBER_BUILD_ENV_NORM_EXISTS

@@ -19,7 +19,7 @@ your own job queue for fiber, please read the [requirements](src/queue/README.md
 ## Selling Points
 Some of Fiber's selling points include:
 1. A simple and straightforward interface.
-2. Ability to provide custom memory allocators.
+2. Ability to use custom memory allocators.
 3. No hidden memory allocation.
 4. Ability to select a job queue implementation at initialization.
 5. Support for adding and removing threads after initialization.
@@ -32,11 +32,6 @@ clear and concise with adequate documentation.
 
 ### Custom Memory Allocators
 fiber_init takes function pointers to malloc and free that are used by the pool and queue.
-Allowing the user to provide custom allocators has the following benefits:
-1. It does not force the user to use libc's malloc and free.
-2. A pool's memory can be allocated from a static buffer to ensure Fiber remains within
-   memory constraints.
-
 Using libc's malloc and free is probably okay in 95% of use cases, but the option to use custom
 memory allocators gives the user flexibility.
 
@@ -86,7 +81,7 @@ listed above.
 Fiber is written in C89 and the source attempts to stick to it. Calls to nonstandard
 functions are hidden in files that can be swapped out at build time like
 [atomic_gcc_clang.c](src/atomic_gcc_clang.c) and [threading_pthread.c](src/threading_pthread.c).
-The former hides builtin atomic functions behind an interface, and the latter hides
+The former hides builtin atomic functions behind an interface and the latter hides
 mutex, semaphore, and pthread threading functions behind an interface.
 
 Some tests and the [example](src/example.c) do not hide nonstandard function calls
