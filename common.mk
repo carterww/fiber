@@ -28,14 +28,14 @@ else
 endif
 
 ifeq ($(ATOMIC_OPERATIONS_IMPL),gcc)
-	ATOMIC_OBJ=atomic_gcc_clang.o
 	C_CONFIG_FLAGS+=-D"FIBER_ATOMIC_OPERATIONS_IMPL_GCC"
 else ifeq ($(ATOMIC_OPERATIONS_IMPL),clang)
-	ATOMIC_OBJ=atomic_gcc_clang.o
 	C_CONFIG_FLAGS+=-D"FIBER_ATOMIC_OPERATIONS_IMPL_CLANG"
 else
 	$(error ATOMIC_OPERATIONS_IMPL in config.mk was invalid)
 endif
 
-OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ) $(ATOMIC_OBJ)
+INCLUDES = -I. -I./deps/fiber_atomic
+
+OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ)
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))

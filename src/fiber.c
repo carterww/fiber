@@ -25,7 +25,6 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 {
 	int mutex_res = 1;
-	int sem_res = 1;
 	int tp_start = 1;
 	int queue_init = 1;
 	struct fiber_pool *pool = NULL;
@@ -56,7 +55,6 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 	pool->threads_number = 0;
 	pool->threads_working = 0;
 	pool->threads_kill_number = 0;
-	pool->fiber_wait_callers = 0;
 	pool->malloc = opts->malloc;
 	pool->free = opts->free;
 
@@ -64,11 +62,6 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 	mutex_res = fiber_mutex_init(&pool->lock);
 	if (mutex_res != 0) {
 		res.error = mutex_res;
-		goto err;
-	}
-	sem_res = fiber_sem_init(&pool->threads_sync, 0);
-	if (sem_res != 0) {
-		res.error = sem_res;
 		goto err;
 	}
 
@@ -101,10 +94,6 @@ err: {
 	/* Only call destroy on mutexes and sems if we know they were initialized */
 	if (mutex_res == 0) {
 		int des_res = fiber_mutex_destroy(&pool->lock);
-		fiber_assert(des_res == 0);
-	}
-	if (sem_res == 0) {
-		int des_res = fiber_sem_destroy(&pool->threads_sync);
 		fiber_assert(des_res == 0);
 	}
 	pool->free(pool);
@@ -160,46 +149,14 @@ void fiber_free(struct fiber_pool *pool)
 
 	des_res = fiber_mutex_destroy(&pool->lock);
 	fiber_assert(des_res == 0);
-	des_res = fiber_sem_destroy(&pool->threads_sync);
-	fiber_assert(des_res == 0);
 
 	pool->free(pool);
 }
 
 int fiber_wait(struct fiber_pool *pool)
 {
-	tpsize threads_working;
-	qsize queue_length;
-	tpsize threads_number;
-
-	if (pool == NULL) {
-		return FBR_ENULL_ARGS;
-	}
-
-	(void)atomic_add_fetch_tpsize(&pool->fiber_wait_callers, 1,
-				      FIBER_ATOMIC_ACQ_REL);
-	/* These loads must come after incrementing the value. These values
-         * can change after we load them, but that is ok. All we are interested
-         * in is grabbing a "snapshot" of these values AFTER we incremented
-         * fiber_wait_callers.
-         */
-	threads_working = atomic_load_tpsize(&pool->threads_working,
-					     FIBER_ATOMIC_ACQUIRE);
-	queue_length = pool->queue_ops.length(pool->job_queue);
-	threads_number = atomic_load_tpsize(&pool->threads_working,
-					    FIBER_ATOMIC_ACQUIRE);
-
-	/* There is a case where threads_number goes to zero after loading its
-         * value and queue_length is > 0. This will result in a deadlock. In this
-         * case, the last thread in the pool with post to the sem prior to cleaning
-         * up.
-         */
-	if (threads_number > 0) {
-		if (threads_working > 0 || queue_length > 0) {
-			while (fiber_sem_wait(&pool->threads_sync) == FBR_EINTR)
-				;
-		}
-	}
+	/* TODO: Implement this */
+	(void)pool;
 	return 0;
 }
 
@@ -225,8 +182,8 @@ int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
 	if (pool->queue_ops.push == NULL) {
 		return FBR_EPOOL_UNINIT;
 	}
-	(void)atomic_add_fetch_tpsize(&pool->threads_kill_number, threads_num,
-				      FIBER_ATOMIC_ACQ_REL);
+	(void)fiber_atomic_add_fetch(&pool->threads_kill_number, threads_num,
+				     FIBER_ATOMIC_ACQ_REL);
 	/* This wakes a sleeping worker thread (if one exists). Once the worker
          * wakes up, it will check the pool's flags and see it needs to terminate
          * itself.
@@ -284,7 +241,7 @@ tpsize fiber_threads_number(const struct fiber_pool *pool)
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	return atomic_load_tpsize(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
+	return fiber_atomic_load(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
 }
 
 tpsize fiber_threads_working(const struct fiber_pool *pool)
@@ -292,7 +249,7 @@ tpsize fiber_threads_working(const struct fiber_pool *pool)
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	return atomic_load_tpsize(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
+	return fiber_atomic_load(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
 }
 
 static int
@@ -373,17 +330,17 @@ static jid fiber_fetch_next_jid(jid *job_id_prev)
 	jid j;
 #if FIBER_JID_MAX <= 2147483647 /* Max signed 32 bit value */
 	jid next;
-	jid prev = atomic_load_jid(job_id_prev, FIBER_ATOMIC_ACQUIRE);
+	jid prev = fiber_atomic_load(job_id_prev, FIBER_ATOMIC_ACQUIRE);
 	do {
 		/* Failure of atomic_cmpxchg places job_id_prev's value into
                  * prev. Don't need to load on retries.
                  */
 		next = prev == FIBER_JID_MAX ? -1 : prev;
-	} while (!atomic_compare_exchange_jid(job_id_prev, &prev, next, 1,
-					      FIBER_ATOMIC_ACQ_REL,
-					      FIBER_ATOMIC_ACQUIRE));
+	} while (!fiber_atomic_cmp_xchng(job_id_prev, &prev, next, 1,
+					 FIBER_ATOMIC_ACQ_REL,
+					 FIBER_ATOMIC_ACQUIRE));
 #endif
-	j = atomic_add_fetch_jid(job_id_prev, 1, FIBER_ATOMIC_ACQ_REL);
+	j = fiber_atomic_inc_fetch(job_id_prev, FIBER_ATOMIC_ACQ_REL);
 	fiber_assert(j >= 0);
 	return j;
 }

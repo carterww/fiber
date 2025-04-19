@@ -1,9 +1,9 @@
 #include <limits.h>
 #include <stdlib.h>
 
+#include "atomic.h"
 #include "fiber.h"
 #include "fiber_fifo.h"
-#include "src/atomic.h"
 #include "src/fiber_internal.h"
 
 #include "test/busy_wait.h"
@@ -51,7 +51,7 @@ static void validate_pool(struct fiber_pool *pool,
 
 	TEST_ASSERT_EQUAL(-1, pool->job_id_prev);
 	do {
-		curr_threads_number = atomic_load_tpsize(&pool->threads_number,
+		curr_threads_number = fiber_atomic_load(&pool->threads_number,
 							 FIBER_ATOMIC_ACQUIRE);
 		if (curr_threads_number == opts->threads_number) {
 			break;
@@ -62,7 +62,6 @@ static void validate_pool(struct fiber_pool *pool,
 	TEST_ASSERT_EQUAL(opts->threads_number, curr_threads_number);
 	TEST_ASSERT_EQUAL(0, pool->threads_working);
 	TEST_ASSERT_EQUAL(0, pool->threads_kill_number);
-	TEST_ASSERT_EQUAL(0, pool->fiber_wait_callers);
 	TEST_ASSERT_EQUAL(opts->malloc, pool->malloc);
 	TEST_ASSERT_EQUAL(opts->free, pool->free);
 

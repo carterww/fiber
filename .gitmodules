@@ -1,0 +1,3 @@
+[submodule "deps/fiber_atomic"]
+	path = deps/fiber_atomic
+	url = git@github.com:carterww/fiber_atomic.git

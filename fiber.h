@@ -13,7 +13,7 @@
 #if !defined(FIBER_VERSION_MAJOR)
 #define FIBER_VERSION_MAJOR (0)
 #define FIBER_VERSION_MINOR (2)
-#define FIBER_VERSION_PATCH (0)
+#define FIBER_VERSION_PATCH (1)
 #endif /* FIBER_VERSION_MAJOR */
 
 struct fiber_version {
@@ -186,6 +186,14 @@ void fiber_free(struct fiber_pool *pool);
  */
 int fiber_wait(struct fiber_pool *pool);
 
+/* Blocks until the job identified by job_id has finished.
+ * @param pool -> The pool the job was queued to.
+ * @param job_id -> The job ID returned from fiber_job_push or fiber_job_push_raw.
+ * @error FBR_ENULL_ARGS -> pool was NULL.
+ * @error FBR_EINVLD_JOB -> job_id was invalid.
+ */
+int fiber_wait_job(struct fiber_pool *pool, jid job_id);
+
 /* Get the number of jobs currently waiting to be executed in the job queue.
  * @param pool -> The pool which contains the job queue to check.
  * @returns -> The number of jobs waiting in the queue.
@@ -272,7 +280,7 @@ static int fiber_libversion_compatible(void)
 		       libversion.minor == FIBER_VERSION_MINOR &&
 		       libversion.patch == FIBER_VERSION_PATCH;
 	}
-	/* If the major versions are different there was likely breaking API changes. */
+	/* If the major versions are different there were some breaking API changes. */
 	if (libversion.major != FIBER_VERSION_MAJOR) {
 		return 0;
 	}
@@ -282,9 +290,9 @@ static int fiber_libversion_compatible(void)
 	}
 	/* At this point we know the following:
          * 1. The library's major version is not 0.
-	 * 2. The library's major version is equal to the header file's and
-	 *    the library's minor version is greater than or equal to the header
-	 *    file's.
+	 * 2. The library's major version is equal to the header file's major version.
+         * 3. The library's minor version is greater than or equal to the header
+         *    file's minor version.
          */
 	return 1;
 }

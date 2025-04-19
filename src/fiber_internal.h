@@ -29,9 +29,7 @@ struct fiber_pool {
 	struct fiber_thread *thread_head; /* Guarded by pool's mutex */
 	tpsize threads_number; /* Only atomic LDR/STR */
 	tpsize threads_working; /* Only atomic LDR/STR */
-	fiber_semaphore threads_sync;
 	tpsize threads_kill_number; /* Only atomic LDR/STR */
-	tpsize fiber_wait_callers; /* Only atomic LDR/STR */
 	malloc_function_t malloc;
 	free_function_t free;
 };
