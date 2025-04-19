@@ -17,7 +17,6 @@
 struct fiber_thread {
 	struct fiber_thread *next;
 	tid thread_id;
-	jid job_id; /* Only atomic LDR/STR (RELAXED used right now) */
 };
 
 /* A pool of threads and a job queue */

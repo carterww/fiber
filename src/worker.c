@@ -46,7 +46,6 @@ int fiber_workers_start(struct fiber_pool *pool,
 		}
 		arg->pool = pool;
 		arg->thread = thread_curr;
-		arg->thread->job_id = FBR_EINVLD_JOB;
 		arg->prev = prev;
 		prev = arg;
 		error_code = fiber_thread_create(&arg->thread->thread_id,
@@ -168,7 +167,6 @@ void fiber_worker_wake_other(const struct fiber_pool *pool)
 	int res;
 	static struct fiber_job wake_job = { FIBER_JID_MIN, fiber_wake_runner,
 					     NULL };
-	jid job_id;
 	void *(*job_func)(void *arg);
 	void *job_arg;
 
@@ -248,13 +246,6 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 		int queue_pop_res;
 		int should_exit;
 
-		/* IMPORTANT: Nobody currently loads the thread's job_id and
-                 * the thread struct is private so no user should be able to.
-                 * Since we only store the job_id, RELAXED can be used. This may
-                 * be used in the future so it may need to be changed.
-                 */
-		fiber_atomic_store(&thread->job_id, FBR_EINVLD_JOB,
-				   FIBER_ATOMIC_RELAXED);
 		queue_pop_res = pool->queue_ops.pop(
 			pool->job_queue, &job_buffer, FIBER_QUEUE_BLOCK);
 		fiber_assert(queue_pop_res == 0);
@@ -290,8 +281,6 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 {
 	do {
 		tpsize to_kill;
-		fiber_atomic_store(&thread->job_id, job->job_id,
-				   FIBER_ATOMIC_RELAXED);
 		job->job_func(job->job_arg);
 
 		/* Speed is important here. I am prioritizing speed over getting the
