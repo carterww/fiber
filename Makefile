@@ -7,7 +7,7 @@ C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal \
 		  -Wnull-dereference -Wmissing-include-dirs -Wswitch-default \
 		  -Wswitch-enum
 C_PEDANTIC_FLAGS = -Wpedantic
-C_FLAGS = -std=c89 $(C_OPT_FLAGS) $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS) $(INCLUDES)
+C_FLAGS = -std=c89 -fpic $(C_OPT_FLAGS) $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS) $(INCLUDES)
 
 Q = @
 
@@ -27,12 +27,19 @@ endif
 
 all: lib
 
-lib: $(DIRS) $(OBJ_OUT)
-	@ar rcs bin/lib$(TARGET).a $(OBJ_OUT)
-	@printf "ar lib$(TARGET).a\n"
+lib: lib$(TARGET).a
 
-lib_so: C_FLAGS+=-fpic
-lib_so: clean $(DIRS) $(OBJ_OUT)
+lib_standalone: lib$(TARGET)_standalone.a
+
+lib$(TARGET).a: $(DIRS) $(OBJ_OUT)
+	@ar rcs bin/$@ $(OBJ_OUT)
+	@printf "ar $@\n"
+
+lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
+	@ar rcs bin/$@ $(OBJ_OUT)
+	@printf "ar $@\n"
+
+lib_so: $(DIRS) $(OBJ_OUT)
 	@$(CC) $(C_FLAGS) -shared -o bin/lib$(TARGET).so $(OBJ_OUT)
 	@printf "CC -shared lib$(TARGET).so\n"
 
@@ -93,4 +100,4 @@ endef
 
 $(foreach TEST_BIN,$(TEST_ALL),$(eval $(call TARGET_COMPILE_TEST,$(TEST_BIN))))
 
-.PHONY: all lib lib_so example clean test_clean test_result_clean test_run test_api
+.PHONY: all lib lib_standalone lib_so example clean test_clean test_result_clean test_run test_api
