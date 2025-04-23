@@ -35,7 +35,7 @@ else
 	$(error ATOMIC_OPERATIONS_IMPL in config.mk was invalid)
 endif
 
-INCLUDES = -I. -I./deps/fiber_atomic
+INCLUDES = -I. -I./deps/fiber_atomic/include
 
 OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ)
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))

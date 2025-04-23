@@ -1,9 +1,9 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#include "atomic.h"
 #include "fiber.h"
 #include "fiber_fifo.h"
+#include "fiber_atomic/atomic.h"
 #include "src/fiber_internal.h"
 
 #include "test/busy_wait.h"

@@ -1,8 +1,8 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
+#include "fiber_atomic/atomic.h"
 #include "threading.h"
 #include "thread_list.h"
 #include "utils.h"

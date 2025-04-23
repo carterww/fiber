@@ -3,9 +3,9 @@
 #ifndef _FIBER_TEST_INTERNAL_H
 #define _FIBER_TEST_INTERNAL_H
 
-#include "atomic.h"
 #include "fiber.h"
 #include "fiber_internal.h"
+#include "fiber_atomic/atomic.h"
 #include "threading.h"
 #include "worker.h"
 
