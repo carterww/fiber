@@ -3,7 +3,7 @@
 #ifndef _FIBER_INTERNAL_H
 #define _FIBER_INTERNAL_H
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "threading.h"
 
 /* Artificial limits that can be set by the user */

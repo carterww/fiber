@@ -5,7 +5,7 @@
 
 #include <stddef.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "fiber_internal.h"
 
 struct fiber_thread_list_init_result {

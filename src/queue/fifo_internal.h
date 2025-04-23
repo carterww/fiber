@@ -3,7 +3,7 @@
 #ifndef _FIBER_FIFO_INTERNALS_H
 #define _FIBER_FIFO_INTERNALS_H
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "src/threading.h"
 
 /* Definition of the opaque job queue pointer declared in fiber_fifo.h */

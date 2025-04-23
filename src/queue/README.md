@@ -9,7 +9,7 @@ The queue is made up of two members in the pool:
 2. A VTable of the type struct fiber_queue_operations. These are the functions
    the pool calls when interacting with the queue.
 The VTable is provided by the user in fiber_init. For this reason, the queue's header
-file should be a part of the public API (notice fiber_fifo.h is in the project's root
+file should be a part of the public API (notice fiber_fifo.h is in the project's include
 directory). This allows the user to pass you queue functions to fiber_init.
 
 ### VTable Functions

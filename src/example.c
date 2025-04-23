@@ -7,8 +7,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 
 /* Helper macro to make exiting on error easier */
 #define EXIT_ERR(err)      \

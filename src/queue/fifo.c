@@ -2,8 +2,8 @@
 
 #include <limits.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fifo_internal.h"
 #include "src/threading.h"
 #include "src/utils.h"

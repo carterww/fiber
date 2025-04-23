@@ -5,7 +5,7 @@
 #include <semaphore.h>
 #include <stddef.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "threading.h"
 #include "utils.h"
 

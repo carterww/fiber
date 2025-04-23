@@ -4,15 +4,15 @@ only supports pthreads right now, it can be modified to use other threading APIs
 easily.
 
 ## API
-Each function that makes up Fiber's API can be found in [fiber.h](fiber.h). Each
+Each function that makes up Fiber's API can be found in [fiber.h](include/fiber/fiber.h). Each
 function has a comment above its prototype describing its behavior, parameters, and
 return value.
 
-fiber.h does not provide prototypes for queue functions. These will be
-found in separte header file(s).
+fiber.h does not provide prototypes for queue functions. These will be found in separate header
+file(s).
 
 ## Writing a Custom Job Queue
-Fiber provides a default [job queue implementation](fiber_fifo.h) that should fulfil most needs,
+Fiber provides a default [job queue implementation](include/fiber/fiber_fifo.h) that should fulfil most needs,
 but you can easily integrate a custom job queue into Fiber. If you are interested in writing
 your own job queue for fiber, please read the [requirements](src/queue/README.md).
 
@@ -27,7 +27,7 @@ Some of Fiber's selling points include:
 7. Designed for portability.
 
 ### Simple and Straightforward Interface
-This is hard to quantify, but I'd like to think all the functions in [fiber.h](fiber.h) are
+This is hard to quantify, but I'd like to think all the functions in [fiber.h](include/fiber/fiber.h) are
 clear and concise with adequate documentation.
 
 ### Custom Memory Allocators

@@ -1,6 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "utils.h"
 
 /* This file is very messy and macro heavy... I'm sorry */

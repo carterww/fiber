@@ -3,7 +3,7 @@
 #ifndef _FIBER_THREADING_H
 #define _FIBER_THREADING_H
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 #if defined(FIBER_THREADING_LIB_PTHREAD)
 

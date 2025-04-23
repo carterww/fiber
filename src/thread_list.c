@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "fiber_internal.h"
 #include "thread_list.h"
 #include "utils.h"

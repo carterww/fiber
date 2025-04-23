@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 #include "fiber_internal.h"
 #include "fiber_atomic/atomic.h"
 #include "thread_list.h"

@@ -1,6 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 /** Version of lib **/
 static const struct fiber_version libversion = {
