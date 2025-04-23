@@ -39,3 +39,13 @@ INCLUDES = -I. -I./deps/fiber_atomic/include
 
 OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ)
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
+
+Q = @
+cc_cmd_generic_source = $(Q)$(CC) $(C_FLAGS) -c $< -o $@
+cc_cmd_generic_out    = $(Q)$(CC) $(C_FLAGS) -o $@ $^
+test_summary_cmd = @python3 test/unity_test_summary.py ./build/test/result/
+cc_pretty_print  = @printf "CC $<\n"
+
+ifneq ($(Q),@)
+	cc_pretty_print =
+endif

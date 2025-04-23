@@ -9,21 +9,10 @@ C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal \
 C_PEDANTIC_FLAGS = -Wpedantic
 C_FLAGS = -std=c89 -fpic $(C_OPT_FLAGS) $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS) $(INCLUDES)
 
-Q = @
-
 BIN_DIRS = bin $(TEST_BIN_DIRS)
 BUILD_DIRS = build build/queue $(TEST_BUILD_DIRS) build/test/result
 
 DIRS = $(BIN_DIRS) $(BUILD_DIRS)
-
-cc_cmd_generic_source = $(Q)$(CC) $(C_FLAGS) -c $< -o $@
-cc_cmd_generic_out    = $(Q)$(CC) $(C_FLAGS) -o $@ $^
-test_summary_cmd = @python3 test/unity_test_summary.py ./build/test/result/
-cc_pretty_print  = @printf "CC $<\n"
-
-ifneq ($(Q),@)
-	cc_pretty_print =
-endif
 
 all: lib
 
