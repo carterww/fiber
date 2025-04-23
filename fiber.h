@@ -319,7 +319,7 @@ static int fiber_libversion_compatible(void)
 /** Flags **/
 
 /* Job Queue Flags */
-#define FIBER_QUEUE_BLOCK (1 << 31)
-#define FIBER_QUEUE_NO_BLOCK 0
+#define FIBER_QUEUE_BLOCK (1UL << 31)
+#define FIBER_QUEUE_NO_BLOCK (0UL)
 
 #endif /* FIBER_H */

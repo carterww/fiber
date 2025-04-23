@@ -73,10 +73,6 @@ int fiber_capability_get(enum fiber_capability_option opt)
         unsigned int idx;
         unsigned int shift;
 
-        if (opt < 0 || opt >= FIBER_CAPABILITY_ENUM_END) {
-                return 0;
-        }
-
         idx = ((unsigned int)opt) / 8U;
         shift = ((unsigned int)opt) % 8U;
 

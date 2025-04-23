@@ -150,7 +150,7 @@ static int example_compatible_fiber(void)
 	return fifo_capable && version_compatible;
 }
 
-static struct fiber_pool *pool_init(tpsize threads_num, qsize queue_length)
+static struct fiber_pool *pool_init(tpsize tnum, qsize queue_length)
 {
 	struct fiber_pool_init_options pool_opts;
 	struct fiber_queue_operations queue_ops = FIBER_FIFO_QUEUE_OPERATIONS;
@@ -163,7 +163,7 @@ static struct fiber_pool *pool_init(tpsize threads_num, qsize queue_length)
 	pool_opts.malloc = malloc; /* Use libc malloc */
 	pool_opts.free = free; /* Use libc free */
 	pool_opts.queue_length = queue_length;
-	pool_opts.threads_number = threads_num;
+	pool_opts.threads_number = tnum;
 
 	init_res = fiber_init(&pool_opts);
 	if (init_res.error != 0) {
@@ -173,25 +173,25 @@ static struct fiber_pool *pool_init(tpsize threads_num, qsize queue_length)
 	return init_res.pool;
 }
 
-static void pretty_print_result(tpsize threads_num, suseconds_t duration)
+static void pretty_print_result(tpsize tnum, suseconds_t duration)
 {
 	static char buff[32];
 	char *num_start;
 	suseconds_t remaining;
 	unsigned long i;
 
-	memset(buff, 0, 32);
+	memset(buff, 0, (size_t)32);
 	/* Start out of range (at term char) */
 	num_start = &buff[31];
 	remaining = duration;
 	i = 0;
 
 	while (num_start >= buff) {
-		suseconds_t digit = remaining % 10;
+		char digit = (char)((remaining % 10) + '0');
 		remaining = remaining / 10;
 
 		--num_start;
-		*num_start = '0' + digit;
+		*num_start = digit;
 
 		if (remaining == 0) {
 			break;
@@ -205,5 +205,5 @@ static void pretty_print_result(tpsize threads_num, suseconds_t duration)
 	}
 
 	printf("Time to run %d jobs with %3d threads:  %13s us\n",
-	       jobs_push_num, threads_num, num_start);
+	       jobs_push_num, tnum, num_start);
 }

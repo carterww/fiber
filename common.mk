@@ -5,7 +5,6 @@ QUEUE_OBJS =
 ifeq ($(ENV),norm)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_NORM"
 else ifeq ($(ENV),debug)
-	C_OPT_FLAGS = -O0
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG" -g
 else ifeq ($(ENV),test)
 	C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST" -g
@@ -35,14 +34,12 @@ else
 	$(error ATOMIC_OPERATIONS_IMPL in config.mk was invalid)
 endif
 
-INCLUDES = -I. -I./deps/fiber_atomic/include
-
 OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ)
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
 
 Q = @
 cc_cmd_generic_source = $(Q)$(CC) $(C_FLAGS) -c $< -o $@
-cc_cmd_generic_out    = $(Q)$(CC) $(C_FLAGS) -o $@ $^
+cc_cmd_generic_out    = $(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) -o $@ $^
 test_summary_cmd = @python3 test/unity_test_summary.py ./build/test/result/
 cc_pretty_print  = @printf "CC $<\n"
 

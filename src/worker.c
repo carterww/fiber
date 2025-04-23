@@ -81,8 +81,20 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 	fiber_assert(pool != NULL);
 	fiber_assert(thread != NULL);
 
+	/* I cannot get pthread_cleanup_push to work with this warning using gcc.
+         * I'd like the warning for other parts of the code, so I'm going to
+         * disable it for this one line. It has to do with some __builtin_expect
+         * check.
+         */
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wtraditional-conversion"
+#endif /* __GNUC__ && !__clang__ */
 	fiber_thread_cleanup_push(fiber_worker_runner_cleanup,
 				  fiber_worker_thread_arg);
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif /* __GNUC__ && !__clang__ */
 	(void)fiber_thread_cancel_type_set(FIBER_THREAD_CANCEL_DEFERRED);
 	(void)fiber_thread_cancel_enable();
 	(void)fiber_atomic_inc_fetch(&pool->threads_number,
@@ -115,6 +127,8 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
 	tpsize count;
 	tpsize i;
 
+	fiber_assert(threads_number > 0);
+
 	curr = threads_head;
 	/* threads_number is a limit, not an exact number. */
 	for (count = 0; count < threads_number && curr != NULL; ++count) {
@@ -128,7 +142,7 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
          * in fiber_free. That seems like odd behavior for a library, even if
          * it is in the name of performance.
          */
-	tid_list = pool->malloc(count * sizeof(*tid_list));
+	tid_list = pool->malloc((unsigned long)count * sizeof(*tid_list));
 	curr = threads_head;
 	/* If malloc fails here we do it the slower way */
 	if (tid_list == NULL) {
@@ -164,7 +178,7 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
 
 void fiber_worker_wake_other(const struct fiber_pool *pool)
 {
-	int res;
+	jid res;
 	static struct fiber_job wake_job = { FIBER_JID_MIN, fiber_wake_runner,
 					     NULL };
 	void *(*job_func)(void *arg);
@@ -279,6 +293,7 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 				     struct fiber_thread *thread,
 				     struct fiber_job *job)
 {
+	(void)thread;
 	do {
 		tpsize to_kill;
 		job->job_func(job->job_arg);

@@ -1,17 +1,10 @@
 include config.mk
 include common.mk
+include flags.mk
 include test/test.mk
-
-C_WARNING_FLAGS = -Werror -Wall -Wextra -Wno-unused -Wfloat-equal \
-		  -Wdouble-promotion -Wformat-overflow -Wformat=2 \
-		  -Wnull-dereference -Wmissing-include-dirs -Wswitch-default \
-		  -Wswitch-enum
-C_PEDANTIC_FLAGS = -Wpedantic
-C_FLAGS = -std=c89 -fpic $(C_OPT_FLAGS) $(C_WARNING_FLAGS) $(C_CONFIG_FLAGS) $(INCLUDES)
 
 BIN_DIRS = bin $(TEST_BIN_DIRS)
 BUILD_DIRS = build build/queue $(TEST_BUILD_DIRS) build/test/result
-
 DIRS = $(BIN_DIRS) $(BUILD_DIRS)
 
 all: lib
@@ -29,11 +22,11 @@ lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
 	@printf "ar $@\n"
 
 lib_so: $(DIRS) $(OBJ_OUT)
-	@$(CC) $(C_FLAGS) -shared -o bin/lib$(TARGET).so $(OBJ_OUT)
+	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o bin/lib$(TARGET).so $(OBJ_OUT)
 	@printf "CC -shared lib$(TARGET).so\n"
 
 example: lib build/example.o
-	$(Q)$(CC) $(C_FLAGS) -Lbin $(word 2,$^) -o bin/$@ -l:lib$(TARGET).a
+	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) -Lbin $(word 2,$^) -o bin/$@ -l:lib$(TARGET).a
 
 # This code is external and has warnings so I will not use those flags here
 build/test/unity.o: C_FLAGS:=$(filter-out $(C_WARNING_FLAGS) std=c89, $(C_FLAGS))
@@ -42,7 +35,6 @@ build/test/%.o: test/%.c
 	$(cc_pretty_print)
 
 build/threading_pthread.o: C_FLAGS+=-pthread
-build/%.o: C_FLAGS+=$(C_PEDANTIC_FLAGS)
 build/%.o: src/%.c
 	$(cc_cmd_generic_source)
 	$(cc_pretty_print)

@@ -1,5 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
+#include <limits.h>
+
 #include "fiber.h"
 #include "fiber_fifo.h"
 #include "fifo_internal.h"
@@ -19,6 +21,7 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 	struct fiber_queue_init_result res = { 0, NULL };
 
 	fiber_assert(capacity > 0);
+	fiber_assert((unsigned int)capacity <= UINT_MAX);
 	fiber_assert(_malloc != NULL);
 	fiber_assert(_free != NULL);
 
@@ -27,12 +30,12 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 		res.error = FBR_ENOMEM;
 		goto err;
 	}
-	jobs = _malloc(capacity * sizeof(*jobs));
+	jobs = _malloc((unsigned long)capacity * sizeof(*jobs));
 	if (jobs == NULL) {
 		res.error = FBR_ENOMEM;
 		goto err;
 	}
-	sem_void_res = fiber_sem_init(&fq->void_num, capacity);
+	sem_void_res = fiber_sem_init(&fq->void_num, (unsigned int)capacity);
 	if (sem_void_res != 0) {
 		res.error = sem_void_res;
 		goto err;
