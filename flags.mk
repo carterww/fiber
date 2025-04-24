@@ -1,6 +1,9 @@
 # These are the default flags that should work for clang and gcc. More specific
 # flags my be added based on CC.
 
+# The warning, security, and debug flags were mostly taken from this article:
+# https://airbus-seclab.github.io/c-compiler-security/
+
 C_PIC_FLAG = -fPIC
 C_STD_FLAG = -std=c89
 
