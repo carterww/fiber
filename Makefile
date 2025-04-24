@@ -9,24 +9,24 @@ DIRS = $(BIN_DIRS) $(BUILD_DIRS)
 
 all: lib
 
-lib: lib$(TARGET).a
+lib: bin/lib$(TARGET).a
 
-lib_standalone: lib$(TARGET)_standalone.a
+lib_standalone: bin/lib$(TARGET)_standalone.a
 
-lib_so: lib$(TARGET).so
+lib_so: bin/lib$(TARGET).so
 
-lib$(TARGET).a: $(DIRS) $(OBJ_OUT)
-	@ar rcs bin/$@ $(OBJ_OUT)
+bin/lib$(TARGET).a: $(DIRS) $(OBJ_OUT)
+	@ar rcs $@ $(OBJ_OUT)
 	@printf "ar $@\n"
 
-lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
-	@ar rcs bin/$@ $(OBJ_OUT)
+bin/lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
+	@ar rcs $@ $(OBJ_OUT)
 	@printf "ar $@\n"
 
-lib$(TARGET).so: C_FLAGS := $(filter-out $(C_PIC_FLAG),$(C_FLAGS))
-lib$(TARGET).so: C_FLAGS += $(C_PIC_FLAG)
-lib$(TARGET).so: $(DIRS) $(OBJ_OUT)
-	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o bin/$@ $(OBJ_OUT)
+bin/lib$(TARGET).so: C_FLAGS := $(filter-out $(C_PIC_FLAG),$(C_FLAGS))
+bin/lib$(TARGET).so: C_FLAGS += $(C_PIC_FLAG)
+bin/lib$(TARGET).so: $(DIRS) $(OBJ_OUT)
+	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o $@ $(OBJ_OUT)
 	@printf "CC -shared $@\n"
 
 example: lib build/example.o

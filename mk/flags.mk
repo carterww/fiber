@@ -1,8 +1,8 @@
-# These are the default flags that should work for clang and gcc. More specific
-# flags my be added based on CC.
-
 # The warning, security, and debug flags were mostly taken from this article:
 # https://airbus-seclab.github.io/c-compiler-security/
+
+# These are the default flags that should work for clang and gcc. More specific
+# flags my be added based on CC.
 
 C_PIC_FLAG = -fPIC
 C_STD_FLAG = -std=c89
@@ -30,9 +30,9 @@ COMPILER_VERSION_OUTPUT = $(shell $(CC) --version | tr A-Z a-z)
 ifeq ($(findstring gcc,$(COMPILER_VERSION_OUTPUT)),gcc)
 C_WARNING_FLAGS += -Wformat-overflow=2 -Wformat-truncation=2 -Wtrampolines \
 		   -Warray-bounds=2 -Wimplicit-fallthrough=3 -Wlogical-op \
-		   -Wtraditional-conversion -Wshift-overflow=2 -Wstringop-overflow=4 \
-		   -Warith-conversion -Wduplicated-cond -Wduplicated-branches \
-		   -Wstack-usage=10000 -Wcast-align=strict
+		   -Wshift-overflow=2 -Wstringop-overflow=4 -Warith-conversion \
+		   -Wduplicated-cond -Wduplicated-branches -Wstack-usage=10000 \
+		   -Wcast-align=strict
 C_DEBUG_FLAGS += -fsanitize=bounds-strict -fanalyzer
 # Add sanitize flags
 ifeq ($(DEBUG_SANITIZE),thread)
@@ -72,7 +72,6 @@ C_DEBUG_FLAGS += -fsanitize=address -fsanitize=leak
 endif
 endif
 
-
 # C_CONFIG_FLAGS is set by common.mk
 C_FLAGS = $(C_STD_FLAG) $(C_OPTIMIZE_FLAGS) $(C_WARNING_FLAGS) \
 	  $(C_SECURITY_FLAGS) $(C_INCLUDE_FLAGS) $(C_CONFIG_FLAGS)
@@ -86,4 +85,3 @@ endif
 ifeq ($(PIC),1)
 C_FLAGS += $(C_PIC_FLAG)
 endif
-

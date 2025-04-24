@@ -38,7 +38,7 @@ COMPILE_FIBER_FIFO_QUEUE=1
 THREADING_LIB=pthread
 
 # enum { gcc | clang }
-# Atomic operation implementation to use (currently only src/atomic_gcc_clang.c)
+# Atomic operation implementation to use.
 # Note: gcc and clang use the same impl file so no need to switch between the
 # two if switching between the two as CC
 ATOMIC_OPERATIONS_IMPL=gcc

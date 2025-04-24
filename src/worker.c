@@ -81,20 +81,8 @@ void *fiber_worker_runner(void *fiber_worker_thread_arg)
 	fiber_assert(pool != NULL);
 	fiber_assert(thread != NULL);
 
-	/* I cannot get pthread_cleanup_push to work with this warning using gcc.
-         * I'd like the warning for other parts of the code, so I'm going to
-         * disable it for this one line. It has to do with some __builtin_expect
-         * check.
-         */
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wtraditional-conversion"
-#endif /* __GNUC__ && !__clang__ */
 	fiber_thread_cleanup_push(fiber_worker_runner_cleanup,
 				  fiber_worker_thread_arg);
-#if defined(__GNUC__) && !defined(__clang__)
-#pragma GCC diagnostic pop
-#endif /* __GNUC__ && !__clang__ */
 	(void)fiber_thread_cancel_type_set(FIBER_THREAD_CANCEL_DEFERRED);
 	(void)fiber_thread_cancel_enable();
 	(void)fiber_atomic_inc_fetch(&pool->threads_number,
