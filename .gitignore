@@ -11,3 +11,4 @@ perf.*
 fiber.h.bak
 version.plist
 xray-log*
+config.mk

@@ -13,6 +13,8 @@ lib: lib$(TARGET).a
 
 lib_standalone: lib$(TARGET)_standalone.a
 
+lib_so: lib$(TARGET).so
+
 lib$(TARGET).a: $(DIRS) $(OBJ_OUT)
 	@ar rcs bin/$@ $(OBJ_OUT)
 	@printf "ar $@\n"
@@ -21,9 +23,11 @@ lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
 	@ar rcs bin/$@ $(OBJ_OUT)
 	@printf "ar $@\n"
 
-lib_so: $(DIRS) $(OBJ_OUT)
-	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o bin/lib$(TARGET).so $(OBJ_OUT)
-	@printf "CC -shared lib$(TARGET).so\n"
+lib$(TARGET).so: C_FLAGS := $(filter-out $(C_PIC_FLAG),$(C_FLAGS))
+lib$(TARGET).so: C_FLAGS += $(C_PIC_FLAG)
+lib$(TARGET).so: $(DIRS) $(OBJ_OUT)
+	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o bin/$@ $(OBJ_OUT)
+	@printf "CC -shared $@\n"
 
 example: lib build/example.o
 	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) -Lbin $(word 2,$^) -o bin/$@ -l:lib$(TARGET).a
