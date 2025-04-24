@@ -1,7 +1,7 @@
 include config.mk
-include common.mk
-include flags.mk
-include test/test.mk
+include mk/env_setup.mk
+include mk/flags.mk
+include mk/test/test.mk
 
 BIN_DIRS = bin $(TEST_BIN_DIRS)
 BUILD_DIRS = build build/queue $(TEST_BUILD_DIRS) build/test/result
