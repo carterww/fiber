@@ -1,21 +1,19 @@
 #include <limits.h>
 
-#include "fiber.h"
-#include "src/test_internal.h"
+#include "fiber/fiber.h"
+#include "fiber_lock/mutex.h"
+#include "fiber_lock/semaphore.h"
 #include "src/threading.h"
 
 #include "test/unity.h"
 #include "threading_trace_fault.h"
 
 #define LOCK_CONTROL(control_struct) \
-	TEST_ASSERT_FALSE(           \
-		threading_vtable.mutex_lock(&control_struct.count_lock))
+	TEST_ASSERT_FALSE(fiber_mutex_lock_fn_ptr(&control_struct.count_lock))
 #define UNLOCK_CONTROL(control_struct) \
-	TEST_ASSERT_FALSE(             \
-		threading_vtable.mutex_unlock(&control_struct.count_lock))
-#define LOCK_TRACKER(mtx) TEST_ASSERT_FALSE(threading_vtable.mutex_lock(mtx))
-#define UNLOCK_TRACKER(mtx) \
-	TEST_ASSERT_FALSE(threading_vtable.mutex_unlock(mtx))
+	TEST_ASSERT_FALSE(fiber_mutex_unlock_fn_ptr(&control_struct.count_lock))
+#define LOCK_TRACKER(mtx) TEST_ASSERT_FALSE(fiber_mutex_lock_fn_ptr(mtx))
+#define UNLOCK_TRACKER(mtx) TEST_ASSERT_FALSE(fiber_mutex_unlock_fn_ptr(mtx))
 
 #define SEM_TRACE_MAX (32)
 #define MUTEX_TRACE_MAX (32)
@@ -61,16 +59,6 @@ struct threading_trace_fault_sem_control sem_control = { 0 };
 struct threading_trace_fault_mutex_control mutex_control = { 0 };
 struct threading_trace_fault_thread_control thread_control = { 0 };
 
-/* This comes from the threading_*.c file. It should export its
- * functions if FIBER_THREADING_INTERCEPT is defined in the testing
- * environment.
- */
-extern const struct fiber_threading_vtable threading_vtable;
-#define FIBER_THREADING_INTERCEPT
-#if defined(FIBER_THREADING_LIB_PTHREAD)
-#include "src/threading_pthread.c"
-#endif /* FIBER_THREADING_LIB_PTHREAD */
-
 /** threading_trace_fault Control functions **/
 
 void threading_trace_fault_init(void)
@@ -78,12 +66,12 @@ void threading_trace_fault_init(void)
 	int sem_con, mtx_con, thr_con;
 	int sem_trc, mtx_trc, thr_trc;
 
-	sem_con = threading_vtable.mutex_init(&sem_control.count_lock);
-	mtx_con = threading_vtable.mutex_init(&mutex_control.count_lock);
-	thr_con = threading_vtable.mutex_init(&thread_control.count_lock);
-	sem_trc = threading_vtable.mutex_init(&sem_tracker_lock);
-	mtx_trc = threading_vtable.mutex_init(&mutex_tracker_lock);
-	thr_trc = threading_vtable.mutex_init(&thread_tracker_lock);
+	sem_con = fiber_mutex_init_fn_ptr(&sem_control.count_lock);
+	mtx_con = fiber_mutex_init_fn_ptr(&mutex_control.count_lock);
+	thr_con = fiber_mutex_init_fn_ptr(&thread_control.count_lock);
+	sem_trc = fiber_mutex_init_fn_ptr(&sem_tracker_lock);
+	mtx_trc = fiber_mutex_init_fn_ptr(&mutex_tracker_lock);
+	thr_trc = fiber_mutex_init_fn_ptr(&thread_tracker_lock);
 
 	TEST_ASSERT_FALSE_MESSAGE(
 		sem_con || mtx_con || thr_con || sem_trc || mtx_trc || thr_trc,
@@ -97,12 +85,12 @@ void threading_trace_fault_destroy(void)
 	int sem_con, mtx_con, thr_con;
 	int sem_trc, mtx_trc, thr_trc;
 
-	sem_con = threading_vtable.mutex_destroy(&sem_control.count_lock);
-	mtx_con = threading_vtable.mutex_destroy(&mutex_control.count_lock);
-	thr_con = threading_vtable.mutex_destroy(&thread_control.count_lock);
-	sem_trc = threading_vtable.mutex_destroy(&sem_tracker_lock);
-	mtx_trc = threading_vtable.mutex_destroy(&mutex_tracker_lock);
-	thr_trc = threading_vtable.mutex_destroy(&thread_tracker_lock);
+	sem_con = fiber_mutex_destroy_fn_ptr(&sem_control.count_lock);
+	mtx_con = fiber_mutex_destroy_fn_ptr(&mutex_control.count_lock);
+	thr_con = fiber_mutex_destroy_fn_ptr(&thread_control.count_lock);
+	sem_trc = fiber_mutex_destroy_fn_ptr(&sem_tracker_lock);
+	mtx_trc = fiber_mutex_destroy_fn_ptr(&mutex_tracker_lock);
+	thr_trc = fiber_mutex_destroy_fn_ptr(&thread_tracker_lock);
 
 	TEST_ASSERT_FALSE_MESSAGE(
 		sem_con || mtx_con || thr_con || sem_trc || mtx_trc || thr_trc,
@@ -147,31 +135,22 @@ void threading_trace_fault_reset(void)
 {
 	unsigned long i;
 
-	/* Ok, this may be close to macro hell but it can't be that close :) */
-#define FAIL_AFTER_START(s)                                       \
-	((struct threading_trace_fault_fail_after *)((char *)&s + \
-						     sizeof(fiber_mutex)))
-#define FAIL_AFTER_NUM(s)                   \
-	(sizeof(s) - sizeof(fiber_mutex)) / \
-		sizeof(struct threading_trace_fault_fail_after)
-#define RESET_CONTROL_STRUCT(s)                              \
-	do {                                                 \
-		unsigned long i;                             \
-		struct threading_trace_fault_fail_after *fa; \
-                                                             \
-		fa = FAIL_AFTER_START(s);                    \
-		for (i = 0; i < FAIL_AFTER_NUM(s); ++i) {    \
-			fa[i].count = ULONG_MAX;             \
-			fa[i].fail_res = 0;                  \
-		}                                            \
+#define RESET_CONTROL_STRUCT(s)                                             \
+	do {                                                                \
+		unsigned long k;                                            \
+		struct threading_trace_fault_fail_after *fa;                \
+                                                                            \
+		fa = s.failers.arr;                                         \
+		for (k = 0; k < sizeof(s.failers.arr) / sizeof(*fa); ++k) { \
+			fa[k].count = ULONG_MAX;                            \
+			fa[k].fail_res = 0;                                 \
+		}                                                           \
 	} while (0)
 
 	RESET_CONTROL_STRUCT(sem_control);
 	RESET_CONTROL_STRUCT(mutex_control);
 	RESET_CONTROL_STRUCT(thread_control);
 #undef RESET_CONTROL_STRUCT
-#undef FAIL_AFTER_NUM
-#undef FAIL_AFTER_START
 	for (i = 0; i < SEM_TRACE_MAX; ++i) {
 		sem_tracker[i].sem = NULL;
 	}
@@ -189,21 +168,22 @@ void threading_trace_fault_reset(void)
 	}
 }
 
-struct threading_trace_fault_sem_control *threading_trace_fault_sem_get(void)
+struct threading_trace_fault_sem_control_components *
+threading_trace_fault_sem_get(void)
 {
-	return &sem_control;
+	return &sem_control.failers.comp;
 }
 
-struct threading_trace_fault_mutex_control *
+struct threading_trace_fault_mutex_control_components *
 threading_trace_fault_mutex_get(void)
 {
-	return &mutex_control;
+	return &mutex_control.failers.comp;
 }
 
-struct threading_trace_fault_thread_control *
+struct threading_trace_fault_thread_control_components *
 threading_trace_fault_thread_get(void)
 {
-	return &thread_control;
+	return &thread_control.failers.comp;
 }
 
 /* Functions for inserting, updating, and removing/verifying trackers */
@@ -359,7 +339,8 @@ static void thread_tracker_remove(const tid *thread_id)
 		      thread_tracker[i].join_count == 1);
 	if (count_sum != 2) {
 		UNLOCK_TRACKER(&thread_tracker_lock);
-		TEST_ASSERT_EQUAL_MESSAGE(2, count_sum, "thread call count_sum");
+		TEST_ASSERT_EQUAL_MESSAGE(2, count_sum,
+					  "thread call count_sum");
 	}
 	if (!valid_pair) {
 		UNLOCK_TRACKER(&thread_tracker_lock);
@@ -369,15 +350,16 @@ static void thread_tracker_remove(const tid *thread_id)
 }
 
 /* Check if the function should fail on this call and return the error if so */
-#define IF_FAIL_RETURN(control_struct, control_member)                 \
-	do {                                                           \
-		LOCK_CONTROL(control_struct);                          \
-		if (control_struct.control_member.count == 0) {        \
-			UNLOCK_CONTROL(control_struct);                \
-			return control_struct.control_member.fail_res; \
-		}                                                      \
-		--control_struct.control_member.count;                 \
-		UNLOCK_CONTROL(control_struct);                        \
+#define IF_FAIL_RETURN(control_struct, control_member)                       \
+	do {                                                                 \
+		LOCK_CONTROL(control_struct);                                \
+		if (control_struct.failers.comp.control_member.count == 0) { \
+			UNLOCK_CONTROL(control_struct);                      \
+			return control_struct.failers.comp.control_member    \
+				.fail_res;                                   \
+		}                                                            \
+		--control_struct.failers.comp.control_member.count;          \
+		UNLOCK_CONTROL(control_struct);                              \
 	} while (0)
 
 /** Semaphore functions **/
@@ -387,7 +369,7 @@ int fiber_sem_init(fiber_semaphore *sem, unsigned int initial_value)
 	int res;
 
 	IF_FAIL_RETURN(sem_control, init);
-	res = threading_vtable.sem_init(sem, initial_value);
+	res = fiber_sem_init_fn_ptr(sem, initial_value);
 	/* If init fails don't count it because destroy should not be called */
 	if (res == 0) {
 		LOCK_TRACKER(&sem_tracker_lock);
@@ -402,7 +384,7 @@ int fiber_sem_destroy(fiber_semaphore *sem)
 	int res;
 
 	IF_FAIL_RETURN(sem_control, destroy);
-	res = threading_vtable.sem_destroy(sem);
+	res = fiber_sem_destroy_fn_ptr(sem);
 	if (res == 0) {
 		LOCK_TRACKER(&sem_tracker_lock);
 		sem_tracker_remove(sem);
@@ -415,25 +397,25 @@ int fiber_sem_destroy(fiber_semaphore *sem)
 int fiber_sem_wait(fiber_semaphore *sem)
 {
 	IF_FAIL_RETURN(sem_control, wait);
-	return threading_vtable.sem_wait(sem);
+	return fiber_sem_wait_fn_ptr(sem);
 }
 
 int fiber_sem_trywait(fiber_semaphore *sem)
 {
 	IF_FAIL_RETURN(sem_control, trywait);
-	return threading_vtable.sem_trywait(sem);
+	return fiber_sem_trywait_fn_ptr(sem);
 }
 
 int fiber_sem_post(fiber_semaphore *sem)
 {
 	IF_FAIL_RETURN(sem_control, post);
-	return threading_vtable.sem_post(sem);
+	return fiber_sem_post_fn_ptr(sem);
 }
 
 int fiber_sem_getvalue(fiber_semaphore *sem, int *value_out)
 {
 	IF_FAIL_RETURN(sem_control, getvalue);
-	return threading_vtable.sem_getvalue(sem, value_out);
+	return fiber_sem_getvalue_fn_ptr(sem, value_out);
 }
 
 /** Mutex functions **/
@@ -443,7 +425,7 @@ int fiber_mutex_init(fiber_mutex *mut)
 	int res;
 
 	IF_FAIL_RETURN(mutex_control, init);
-	res = threading_vtable.mutex_init(mut);
+	res = fiber_mutex_init_fn_ptr(mut);
 	if (res == 0) {
 		LOCK_TRACKER(&mutex_tracker_lock);
 		mutex_tracker_insert(mut);
@@ -457,7 +439,7 @@ int fiber_mutex_destroy(fiber_mutex *mut)
 	int res;
 
 	IF_FAIL_RETURN(mutex_control, destroy);
-	res = threading_vtable.mutex_destroy(mut);
+	res = fiber_mutex_destroy_fn_ptr(mut);
 	if (res == 0) {
 		LOCK_TRACKER(&mutex_tracker_lock);
 		mutex_tracker_remove(mut);
@@ -472,7 +454,7 @@ int fiber_mutex_lock(fiber_mutex *mut)
 	struct threading_trace_fault_mutex_tracker *tracker;
 
 	IF_FAIL_RETURN(mutex_control, lock);
-	res = threading_vtable.mutex_lock(mut);
+	res = fiber_mutex_lock_fn_ptr(mut);
 	if (res == 0) {
 		LOCK_TRACKER(&mutex_tracker_lock);
 		/* Function fails if would return NULL */
@@ -490,7 +472,7 @@ int fiber_mutex_unlock(fiber_mutex *mut)
 	struct threading_trace_fault_mutex_tracker *tracker;
 
 	IF_FAIL_RETURN(mutex_control, unlock);
-	res = threading_vtable.mutex_unlock(mut);
+	res = fiber_mutex_unlock_fn_ptr(mut);
 	if (res == 0) {
 		LOCK_TRACKER(&mutex_tracker_lock);
 		/* Function fails if would return NULL */
@@ -509,7 +491,7 @@ int fiber_thread_create(tid *thread_id, fiber_job_function_t runner, void *arg)
 	int res;
 
 	IF_FAIL_RETURN(thread_control, create);
-	res = threading_vtable.thread_create(thread_id, runner, arg);
+	res = fiber_thread_create_fn_ptr(thread_id, runner, arg);
 	if (res == 0) {
 		LOCK_TRACKER(&thread_tracker_lock);
 		thread_tracker_insert(thread_id);
@@ -530,10 +512,10 @@ void fiber_thread_exit(void *ret_val)
 #error "threading_trace_fault.c only implements a way to get the current thread's id for pthreads"
 #endif
 
-	threading_vtable.thread_exit(ret_val);
+	fiber_thread_exit_fn_ptr(ret_val);
 	LOCK_TRACKER(&thread_tracker_lock);
-        tracker = thread_tracker_get(&caller_thread_id);
-        ++tracker->join_count;
+	tracker = thread_tracker_get(&caller_thread_id);
+	++tracker->join_count;
 	thread_tracker_remove(&caller_thread_id);
 	UNLOCK_TRACKER(&thread_tracker_lock);
 }
@@ -544,7 +526,7 @@ int fiber_thread_detach(const tid *thread_id)
 	struct threading_trace_fault_thread_tracker *tracker;
 
 	IF_FAIL_RETURN(thread_control, detach);
-	res = threading_vtable.thread_detach(thread_id);
+	res = fiber_thread_detach_fn_ptr(thread_id);
 	if (res == 0) {
 		LOCK_TRACKER(&thread_tracker_lock);
 		tracker = thread_tracker_get(thread_id);
@@ -560,7 +542,7 @@ int fiber_thread_join(const tid *thread_id, void **ret_val)
 	struct threading_trace_fault_thread_tracker *tracker;
 
 	IF_FAIL_RETURN(thread_control, join);
-	res = threading_vtable.thread_join(thread_id, ret_val);
+	res = fiber_thread_join_fn_ptr(thread_id, ret_val);
 	if (res == 0) {
 		LOCK_TRACKER(&thread_tracker_lock);
 		tracker = thread_tracker_get(thread_id);
@@ -574,19 +556,19 @@ int fiber_thread_join(const tid *thread_id, void **ret_val)
 int fiber_thread_cancel_enable(void)
 {
 	IF_FAIL_RETURN(thread_control, cancel_enable);
-	return threading_vtable.thread_cancel_enable();
+	return fiber_thread_cancel_enable_fn_ptr();
 }
 
 int fiber_thread_cancel_disable(void)
 {
 	IF_FAIL_RETURN(thread_control, cancel_disable);
-	return threading_vtable.thread_cancel_disable();
+	return fiber_thread_cancel_disable_fn_ptr();
 }
 
 int fiber_thread_cancel_type_set(int cancel_type)
 {
 	IF_FAIL_RETURN(thread_control, cancel_type_set);
-	return threading_vtable.thread_cancel_type_set(cancel_type);
+	return fiber_thread_cancel_type_set_fn_ptr(cancel_type);
 }
 
 int fiber_thread_cancel(const tid *thread_id)
@@ -595,7 +577,7 @@ int fiber_thread_cancel(const tid *thread_id)
 	struct threading_trace_fault_thread_tracker *tracker;
 
 	IF_FAIL_RETURN(thread_control, cancel);
-	res = threading_vtable.thread_cancel(thread_id);
+	res = fiber_thread_cancel_fn_ptr(thread_id);
 	if (res == 0) {
 		LOCK_TRACKER(&thread_tracker_lock);
 		tracker = thread_tracker_get(thread_id);

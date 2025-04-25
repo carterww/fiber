@@ -4,10 +4,10 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-static void mssleep_busy_wait(unsigned long ms)
+static void mssleep_busy_wait(long ms)
 {
 	struct timeval t;
-	unsigned long breakat, now;
+	long breakat, now;
 
 	gettimeofday(&t, NULL);
 	if (sizeof(unsigned long) >= 8) {

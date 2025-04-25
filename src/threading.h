@@ -128,4 +128,15 @@ int fiber_thread_cancel_type_set(int cancel_type);
  */
 int fiber_thread_cancel(const tid *thread_id);
 
+#if defined(FIBER_THREADING_INTERCEPT)
+extern int (*fiber_thread_create_fn_ptr)(tid *, fiber_job_function_t, void *);
+extern void (*fiber_thread_exit_fn_ptr)(void *);
+extern int (*fiber_thread_detach_fn_ptr)(const tid *);
+extern int (*fiber_thread_join_fn_ptr)(const tid *, void **);
+extern int (*fiber_thread_cancel_enable_fn_ptr)(void);
+extern int (*fiber_thread_cancel_disable_fn_ptr)(void);
+extern int (*fiber_thread_cancel_type_set_fn_ptr)(int);
+extern int (*fiber_thread_cancel_fn_ptr)(const tid *);
+#endif
+
 #endif /* _FIBER_THREADING_H */

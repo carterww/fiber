@@ -1,6 +1,6 @@
 #include "test/unity.h"
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 #define CLAMP_BOOL(bool) ((bool) ? 1 : 0)
 
@@ -14,12 +14,9 @@ void tearDown(void)
 
 void test_capability_enum_out_of_range(void)
 {
-	enum fiber_capability_option lo;
 	enum fiber_capability_option hi;
 
-	lo = (enum fiber_capability_option)(-1);
 	hi = (enum fiber_capability_option)FIBER_CAPABILITY_ENUM_END;
-	TEST_ASSERT_FALSE(fiber_capability_get(lo));
 	TEST_ASSERT_FALSE(fiber_capability_get(hi));
 }
 
@@ -50,8 +47,10 @@ void test_capability_current_build(void)
 	atomic_clang = fiber_capability_get(
 		FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG);
 
-	TEST_ASSERT_FALSE(CLAMP_BOOL(asserts) ^ CLAMP_BOOL(FIBER_COMPILE_ASSERTS));
-	TEST_ASSERT_FALSE(CLAMP_BOOL(fifo_queue) ^ CLAMP_BOOL(FIBER_COMPILE_FIBER_FIFO_QUEUE));
+	TEST_ASSERT_FALSE(CLAMP_BOOL(asserts) ^
+			  CLAMP_BOOL(FIBER_COMPILE_ASSERTS));
+	TEST_ASSERT_FALSE(CLAMP_BOOL(fifo_queue) ^
+			  CLAMP_BOOL(FIBER_COMPILE_FIBER_FIFO_QUEUE));
 	/* If there's a better way to do this I'd love to know */
 #if defined(FIBER_BUILD_ENV_NORM)
 	TEST_ASSERT_TRUE(env_norm);

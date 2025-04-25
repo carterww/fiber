@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fifo_validate.h"
 
 #include "test/mock/alloc/alloc_trace.h"
@@ -10,21 +10,21 @@
 
 #define QUEUE_FIFO_SEM_COUNT (2)
 
-#define test_fifo_init_sem_fault_body(fail_after, expected_error)             \
-	do {                                                                  \
-		struct fiber_queue_init_result res;                           \
-		struct fiber_fifo_jq *jq;                                     \
-		struct threading_trace_fault_sem_control *sem_ctrl;           \
-                                                                              \
-		sem_ctrl = threading_trace_fault_sem_get();                   \
-		sem_ctrl->init.count = fail_after;                            \
-		sem_ctrl->init.fail_res = expected_error;                     \
-                                                                              \
-		res = fiber_queue_fifo_init(queue_length, alloc_trace_malloc, \
-					    alloc_trace_free);                \
-                                                                              \
-		TEST_ASSERT_EQUAL(expected_error, res.error);                 \
-		TEST_ASSERT_NULL(res.queue);                                  \
+#define test_fifo_init_sem_fault_body(fail_after, expected_error)              \
+	do {                                                                   \
+		struct fiber_queue_init_result res;                            \
+		struct fiber_fifo_jq *jq;                                      \
+		struct threading_trace_fault_sem_control_components *sem_ctrl; \
+                                                                               \
+		sem_ctrl = threading_trace_fault_sem_get();                    \
+		sem_ctrl->init.count = fail_after;                             \
+		sem_ctrl->init.fail_res = expected_error;                      \
+                                                                               \
+		res = fiber_queue_fifo_init(queue_length, alloc_trace_malloc,  \
+					    alloc_trace_free);                 \
+                                                                               \
+		TEST_ASSERT_EQUAL(expected_error, res.error);                  \
+		TEST_ASSERT_NULL(res.queue);                                   \
 	} while (0)
 
 static const qsize queue_length = 10;

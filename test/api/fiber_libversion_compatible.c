@@ -8,7 +8,7 @@ static int h_patch = -1;
 #define FIBER_VERSION_MINOR (h_minor)
 #define FIBER_VERSION_PATCH (h_patch)
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 /* This points to the internal fiber_version exposed by test_internal.h.
  * Each test should set this beforehand to their desired values.

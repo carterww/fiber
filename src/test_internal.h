@@ -3,12 +3,6 @@
 #ifndef _FIBER_TEST_INTERNAL_H
 #define _FIBER_TEST_INTERNAL_H
 
-#include "fiber.h"
-#include "fiber_internal.h"
-#include "fiber_atomic/atomic.h"
-#include "threading.h"
-#include "worker.h"
-
 /* This file contains struct definitions and extern variables that allow the
  * testing code to peek into the internals of each module. Each struct corresponds
  * to a file and the struct exposes static functions and variables. This will allow
@@ -21,16 +15,12 @@
  */
 #if defined(FIBER_BUILD_ENV_TEST)
 
-struct fiber_threading_vtable {
-	int (*thread_create)(tid *, fiber_job_function_t, void *);
-	void (*thread_exit)(void *);
-	int (*thread_detach)(const tid *);
-	int (*thread_join)(const tid *, void **);
-	int (*thread_cancel_enable)(void);
-	int (*thread_cancel_disable)(void);
-	int (*thread_cancel_type_set)(int);
-	int (*thread_cancel)(const tid *);
-};
+#include "fiber/fiber.h"
+#include "fiber_atomic/atomic.h"
+#include "fiber_internal.h"
+#include "fiber_lock/mutex.h"
+#include "fiber_lock/semaphore.h"
+#include "worker.h"
 
 struct fiber_test_internal_capability {
 	unsigned char *capability_bitstring;

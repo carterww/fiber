@@ -1,6 +1,6 @@
 #include <stdlib.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 #include "test/mock/alloc/alloc_trace.h"
 #include "test/mock/threading/threading_trace_fault.h"

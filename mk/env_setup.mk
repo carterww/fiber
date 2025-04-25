@@ -8,12 +8,19 @@ C_CONFIG_FLAGS = -D"FIBER_COMPILE_ASSERTS=($(COMPILE_ASSERTS))" \
 
 QUEUE_OBJS =
 
+FIBER_LOCK_MUTEX_INTERCEPT = 0
+FIBER_LOCK_SEMAPHORE_INTERCEPT = 0
+
 ifeq ($(ENV),norm)
 C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_NORM"
 else ifeq ($(ENV),debug)
 C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_DEBUG" -g
 else ifeq ($(ENV),test)
 C_CONFIG_FLAGS+=-D"FIBER_BUILD_ENV_TEST" -g
+C_CONFIG_FLAGS+=-D"FIBER_THREADING_INTERCEPT" -D"FIBER_LOCK_MUTEX_INTERCEPT" \
+		-D"FIBER_LOCK_SEMAPHORE_INTERCEPT"
+FIBER_LOCK_MUTEX_INTERCEPT = 1
+FIBER_LOCK_SEMAPHORE_INTERCEPT = 1
 else
 $(error ENV was invalid.)
 endif
@@ -65,7 +72,6 @@ OBJ_OUT = $(patsubst %, build/%, $(OBJ))
 
 Q = @
 cc_cmd_generic_source = $(Q)$(CC) $(C_FLAGS) -c $< -o $@
-cc_cmd_generic_out    = $(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) -o $@ $^
 test_summary_cmd = @python3 test/unity_test_summary.py ./build/test/result/
 cc_pretty_print  = @printf "CC $<\n"
 

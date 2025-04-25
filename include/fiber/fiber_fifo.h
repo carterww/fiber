@@ -3,7 +3,7 @@
 #ifndef _FIBER_QUEUE_FIFO_H
 #define _FIBER_QUEUE_FIFO_H
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 /* Opaque job queue struct */
 struct fiber_fifo_jq;

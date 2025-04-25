@@ -1,23 +1,15 @@
-#include "fiber.h"
+#include "fiber/fiber.h"
+#include "fiber_lock/mutex.h"
 
-#include "src/threading.h"
-
-#include "src/test_internal.h"
 #include "test/mock/alloc/alloc_fault.h"
 #include "test/mock/alloc/alloc_trace.h"
 #include "test/unity.h"
 
 extern fiber_mutex alloc_trace_mutex;
-/* We ALWAYS use the Vtable exported by the threading module in internal testing
- * modules. If we don't and are using threading_trace_fault, threading_trace_fault
- * wil atttempt to track out mutex calls here and ruin everything.
- */
-extern const struct fiber_threading_vtable threading_vtable;
 #define LOCK() \
-	TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_lock(&alloc_trace_mutex)))
-#define UNLOCK()             \
-	TEST_ASSERT_EQUAL(0, \
-			  (threading_vtable.mutex_unlock(&alloc_trace_mutex)))
+	TEST_ASSERT_EQUAL(0, (fiber_mutex_lock_fn_ptr(&alloc_trace_mutex)))
+#define UNLOCK() \
+	TEST_ASSERT_EQUAL(0, (fiber_mutex_unlock_fn_ptr(&alloc_trace_mutex)))
 
 static unsigned long fail_after = 0;
 

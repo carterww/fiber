@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fifo_validate.h"
 
 #include "test/unity.h"
@@ -26,6 +26,7 @@ void test_fifo_init_valid(void)
 {
 	struct fiber_queue_init_result res;
 	struct fiber_fifo_jq *jq;
+	fiber_semaphore sem;
 
 	res = fiber_queue_fifo_init(queue_length, alloc_trace_malloc,
 				    alloc_trace_free);

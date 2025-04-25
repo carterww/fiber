@@ -1,8 +1,8 @@
 #ifndef _FIBER_TEST_QUEUE_IMPLEMENTATIONS_H
 #define _FIBER_TEST_QUEUE_IMPLEMENTATIONS_H
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 
 #include "test/unity.h"
 

@@ -2,7 +2,6 @@
 
 #include <errno.h>
 #include <pthread.h>
-#include <semaphore.h>
 #include <stddef.h>
 
 #include "fiber/fiber.h"
@@ -14,16 +13,16 @@
  * their implementation while adding some other code before and after it. Don't
  * worry about this at all, it is just for testing purposes.
  */
-#if defined(FIBER_THREADING_INTERCEPT) && defined(FIBER_BUILD_ENV_TEST)
+#if defined(FIBER_THREADING_INTERCEPT)
 #define fiber_thread_create _fiber_thread_create
 #define fiber_thread_exit _fiber_thread_exit
 #define fiber_thread_detach _fiber_thread_detach
 #define fiber_thread_join _fiber_thread_join
-#define fiber_thread_cancel_enable _fiber_thread_enable
-#define fiber_thread_cancel_disable _fiber_thread_disable
+#define fiber_thread_cancel_enable _fiber_thread_cancel_enable
+#define fiber_thread_cancel_disable _fiber_thread_cancel_disable
 #define fiber_thread_cancel_type_set _fiber_thread_cancel_type_set
 #define fiber_thread_cancel _fiber_thread_cancel
-#endif /* FIBER_TEST_THREADING_MOCK && FIBER_BUILD_ENV_TEST */
+#endif /* FIBER_TEST_THREADING_MOCK */
 
 static int _fiber_thread_setcancelstate(int state)
 {
@@ -166,20 +165,10 @@ int fiber_thread_cancel(const tid *thread_id)
 #if defined(FIBER_BUILD_ENV_TEST)
 #include "test_internal.h"
 struct fiber_test_internal_threading_pthread
-	fiber_test_internal_threading_pthread = {
-		__fiber_thread_setcancelstate
-	};
+	fiber_test_internal_threading_pthread = { _fiber_thread_setcancelstate };
 #endif /* FIBER_BUILD_ENV_TEST */
 
-#if defined(FIBER_BUILD_ENV_TEST)
-const struct fiber_threading_vtable threading_vtable = {
-	fiber_thread_create,	      fiber_thread_exit,
-	fiber_thread_detach,	      fiber_thread_join,
-	fiber_thread_cancel_enable,   fiber_thread_cancel_disable,
-	fiber_thread_cancel_type_set, fiber_thread_cancel,
-};
-#endif /* FIBER_BUILD_ENV_TEST */
-#if defined(FIBER_THREADING_INTERCEPT) && defined(FIBER_BUILD_ENV_TEST)
+#if defined(FIBER_THREADING_INTERCEPT)
 #undef fiber_thread_create
 #undef fiber_thread_exit
 #undef fiber_thread_detach
@@ -188,4 +177,14 @@ const struct fiber_threading_vtable threading_vtable = {
 #undef fiber_thread_cancel_disable
 #undef fiber_thread_cancel_type_set
 #undef fiber_thread_cancel
-#endif /* FIBER_THREADING_INTERCEPT && FIBER_BUILD_ENV_TEST */
+
+int (*fiber_thread_create_fn_ptr)(tid *, fiber_job_function_t,
+				  void *) = _fiber_thread_create;
+void (*fiber_thread_exit_fn_ptr)(void *) = _fiber_thread_exit;
+int (*fiber_thread_detach_fn_ptr)(const tid *) = _fiber_thread_detach;
+int (*fiber_thread_join_fn_ptr)(const tid *, void **) = _fiber_thread_join;
+int (*fiber_thread_cancel_enable_fn_ptr)(void) = _fiber_thread_cancel_enable;
+int (*fiber_thread_cancel_disable_fn_ptr)(void) = _fiber_thread_cancel_disable;
+int (*fiber_thread_cancel_type_set_fn_ptr)(int) = _fiber_thread_cancel_type_set;
+int (*fiber_thread_cancel_fn_ptr)(const tid *) = _fiber_thread_cancel;
+#endif /* FIBER_THREADING_INTERCEPT */

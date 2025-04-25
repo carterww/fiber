@@ -1,10 +1,9 @@
 #include <stdlib.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
+#include "fiber_lock/mutex.h"
 
 #include "alloc_trace.h"
-#include "src/test_internal.h"
-#include "src/threading.h"
 #include "test/unity.h"
 
 /* We ALWAYS use the Vtable exported by the threading module in internal testing
@@ -13,15 +12,37 @@
  */
 extern const struct fiber_threading_vtable threading_vtable;
 #define LOCK() \
-	TEST_ASSERT_EQUAL(0, (threading_vtable.mutex_lock(&alloc_trace_mutex)))
-#define UNLOCK()             \
-	TEST_ASSERT_EQUAL(0, \
-			  (threading_vtable.mutex_unlock(&alloc_trace_mutex)))
+	TEST_ASSERT_EQUAL(0, (fiber_mutex_lock_fn_ptr(&alloc_trace_mutex)))
+#define UNLOCK() \
+	TEST_ASSERT_EQUAL(0, (fiber_mutex_unlock_fn_ptr(&alloc_trace_mutex)))
 
 #define PTRS_LENGTH() (sizeof(ptrs) / sizeof(*ptrs))
 #define ALLOC_TRACE_MAX_PTRS (256)
 
-#define MALLOC_PADDING_BYTES (4)
+union max_align_t {
+	char c;
+	short s;
+	int i;
+	long l;
+	float f;
+	double d;
+	long double ld;
+	void *p;
+};
+
+/* I want to add N bytes of padding before and after a chunk of memory allocated
+ * from malloc. I used 4 bytes and returned ptr + 4 to the user but this obviously
+ * messes with the alignment of 8 byte pointers (thank you undefined sanitizer for
+ * letting me find that). 
+ *
+ * This approach attempts to keep the largest required alignment returned by malloc
+ * by setting the number of padding bytes to the alignment of the largest primitive.
+ * This probably doesn't work in all cases, but it is ok for most.
+ *
+ * TODO(Carter): This uses a non-standard compiler extension to get the alignment. I
+ * need to put all non-standard test suite tools behind interfaces.
+ */
+#define MALLOC_PADDING_BYTES (__alignof__(union max_align_t))
 #define PADDING_BYTE_VALUE (0x5a)
 
 struct alloc_trace_ptr {
@@ -113,14 +134,14 @@ static void *remove_ptr(char *user_ptr)
 void alloc_trace_init(void)
 {
 	int res;
-	res = threading_vtable.mutex_init(&alloc_trace_mutex);
+	res = fiber_mutex_init_fn_ptr(&alloc_trace_mutex);
 	TEST_ASSERT_EQUAL(0, res);
 }
 
 void alloc_trace_destroy(void)
 {
 	int res;
-	res = threading_vtable.mutex_destroy(&alloc_trace_mutex);
+	res = fiber_mutex_destroy_fn_ptr(&alloc_trace_mutex);
 	TEST_ASSERT_EQUAL(0, res);
 }
 

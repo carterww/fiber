@@ -4,8 +4,9 @@
 
 #include "fiber/fiber.h"
 #include "fiber/fiber_fifo.h"
+#include "fiber_lock/mutex.h"
+#include "fiber_lock/semaphore.h"
 #include "fifo_internal.h"
-#include "src/threading.h"
 #include "src/utils.h"
 
 struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,

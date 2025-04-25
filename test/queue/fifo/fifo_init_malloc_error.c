@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fifo_validate.h"
 
 #include "test/mock/alloc/alloc_fault.h"

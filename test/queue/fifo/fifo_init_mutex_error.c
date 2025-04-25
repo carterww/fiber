@@ -1,7 +1,7 @@
 #include <stdlib.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fifo_validate.h"
 
 #include "test/mock/alloc/alloc_trace.h"
@@ -14,7 +14,8 @@
 	do {                                                                  \
 		struct fiber_queue_init_result res;                           \
 		struct fiber_fifo_jq *jq;                                     \
-		struct threading_trace_fault_mutex_control *mtx_ctrl;         \
+		struct threading_trace_fault_mutex_control_components         \
+			*mtx_ctrl;                                            \
                                                                               \
 		mtx_ctrl = threading_trace_fault_mutex_get();                 \
 		mtx_ctrl->init.count = fail_after;                            \

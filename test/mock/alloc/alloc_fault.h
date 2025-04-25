@@ -3,7 +3,7 @@
 
 #include <stdlib.h>
 
-#include "fiber.h"
+#include "fiber/fiber.h"
 
 void alloc_fault_init(void);
 void alloc_fault_destroy(void);

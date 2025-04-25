@@ -1,8 +1,8 @@
 #include <limits.h>
 #include <stdlib.h>
 
-#include "fiber.h"
-#include "fiber_fifo.h"
+#include "fiber/fiber.h"
+#include "fiber/fiber_fifo.h"
 #include "fiber_atomic/atomic.h"
 #include "src/fiber_internal.h"
 
@@ -52,7 +52,7 @@ static void validate_pool(struct fiber_pool *pool,
 	TEST_ASSERT_EQUAL(-1, pool->job_id_prev);
 	do {
 		curr_threads_number = fiber_atomic_load(&pool->threads_number,
-							 FIBER_ATOMIC_ACQUIRE);
+							FIBER_ATOMIC_ACQUIRE);
 		if (curr_threads_number == opts->threads_number) {
 			break;
 		}
