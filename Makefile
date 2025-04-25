@@ -5,32 +5,29 @@ include mk/test/test.mk
 
 BIN_DIRS = bin $(TEST_BIN_DIRS)
 BUILD_DIRS = build build/queue $(TEST_BUILD_DIRS) build/test/result
-DIRS = $(BIN_DIRS) $(BUILD_DIRS)
+DIRS = lib $(BIN_DIRS) $(BUILD_DIRS)
 
-all: lib
+FIBER_LOCK_LIB_OUT = deps/fiber_lock/lib/libfiber_lock.a
 
-lib: bin/lib$(TARGET).a
+all: lib_static
 
-lib_standalone: bin/lib$(TARGET)_standalone.a
+lib_static: lib/lib$(TARGET).a
 
-lib_so: bin/lib$(TARGET).so
+lib_so: lib/lib$(TARGET).so
 
-bin/lib$(TARGET).a: $(DIRS) $(OBJ_OUT)
+lib/lib$(TARGET).a: lib $(BUILD_DIRS) $(OBJ_OUT)
 	@ar rcs $@ $(OBJ_OUT)
 	@printf "ar $@\n"
 
-bin/lib$(TARGET)_standalone.a: $(DIRS) $(OBJ_OUT)
-	@ar rcs $@ $(OBJ_OUT)
-	@printf "ar $@\n"
-
-bin/lib$(TARGET).so: C_FLAGS := $(filter-out $(C_PIC_FLAG),$(C_FLAGS))
-bin/lib$(TARGET).so: C_FLAGS += $(C_PIC_FLAG)
-bin/lib$(TARGET).so: $(DIRS) $(OBJ_OUT)
+lib/lib$(TARGET).so: C_FLAGS := $(filter-out $(C_PIC_FLAG),$(C_FLAGS))
+lib/lib$(TARGET).so: C_FLAGS += $(C_PIC_FLAG)
+lib/lib$(TARGET).so: lib $(BUILD_DIRS) $(OBJ_OUT)
 	@$(CC) $(C_FLAGS) $(LD_FLAGS) -shared -o $@ $(OBJ_OUT)
 	@printf "CC -shared $@\n"
 
-example: lib build/example.o
-	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) -Lbin $(word 2,$^) -o bin/$@ -l:lib$(TARGET).a
+example: lib/lib$(TARGET).a $(FIBER_LOCK_LIB_OUT) build/example.o $(BIN_DIRS)
+	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) $(word 3,$^) -o bin/$@ -L. \
+		-l:$(word 1,$^) -l:$(FIBER_LOCK_LIB_OUT)
 
 # This code is external and has warnings so I will not use those flags here
 build/test/unity.o: C_FLAGS:=$(filter-out $(C_WARNING_FLAGS) std=c89, $(C_FLAGS))
@@ -46,9 +43,22 @@ build/%.o: src/%.c
 $(DIRS):
 	@mkdir $@
 
+$(FIBER_LOCK_LIB_OUT): deps/fiber_lock/config.mk
+	@$(MAKE) CC=$(CC) ENV=$(ENV) TARGET=fiber_lock DEBUG_SANITIZE=$(DEBUG_SANITIZE) \
+		PIC=$(PIC) COMPILE_ASSERTS=$(COMPILE_ASSERTS) Q=$(Q)\
+		ATOMIC_OPERATIONS_IMPL=$(ATOMIC_OPERATIONS_IMPL) \
+		MUTEX_IMPL=$(MUTEX_IMPL) SEMAPHORE_IMPL=$(SEMAPHORE_IMPL) \
+		SPINLOCK_IMPL=$(SPINLOCK_IMPL) FUTEX_IMPL=$(FUTEX_IMPL) \
+		-C deps/fiber_lock lib_static
+
+deps/fiber_lock/config.mk:
+	@cp deps/fiber_lock/config.def.mk deps/fiber_lock/config.mk
+
 clean:
 	@find build -type f -exec rm {} +
 	@find bin -type f -exec rm {} +
+	@find lib -type f -exec rm {} +
+	@$(MAKE) -C deps/fiber_lock clean
 
 test_clean:
 	@find build/test -type f -exec rm {} +
@@ -85,4 +95,4 @@ endef
 
 $(foreach TEST_BIN,$(TEST_ALL),$(eval $(call TARGET_COMPILE_TEST,$(TEST_BIN))))
 
-.PHONY: all lib lib_standalone lib_so example clean test_clean test_result_clean test_run test_api
+.PHONY: all lib_so example clean test_clean test_result_clean test_run test_api

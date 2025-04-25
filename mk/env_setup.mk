@@ -22,11 +22,34 @@ ifeq ($(COMPILE_FIBER_FIFO_QUEUE),1)
 QUEUE_OBJS+=queue/fifo.o
 endif
 
-ifeq ($(THREADING_LIB),pthread)
+ifeq ($(THREAD_IMPL),posix)
 THREADING_OBJ=threading_pthread.o
 C_CONFIG_FLAGS+=-D"FIBER_THREADING_LIB_PTHREAD"
 else
-$(error THREADING_LIB in config.mk was invalid)
+$(error THREAD_IMPL in config.mk was invalid)
+endif
+
+# Add flags for fiber_lock
+ifeq ($(MUTEX_IMPL),posix)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_MUTEX_POSIX"
+POSIX_C_SOURCE_REQUIREMENT=199506L
+else
+$(error MUTEX_IMPL was invalid. Valid options: posix.)
+endif
+ifeq ($(SEMAPHORE_IMPL),posix)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_SEMAPHORE_POSIX"
+else
+$(error SEMAPHORE_IMPL was invalid. Valid options: posix.)
+endif
+ifeq ($(SPINLOCK_IMPL),posix)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_SPIN_POSIX"
+else
+$(error SPINLOCK_IMPL was invalid. Valid options: posix.)
+endif
+ifeq ($(FUTEX_IMPL),linux)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_FUTEX_LINUX"
+else
+$(error FUTEX_IMPL was invalid. Valid options: linux.)
 endif
 
 ifeq ($(ATOMIC_OPERATIONS_IMPL),gcc)

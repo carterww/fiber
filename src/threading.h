@@ -8,11 +8,8 @@
 #if defined(FIBER_THREADING_LIB_PTHREAD)
 
 #include <pthread.h>
-#include <semaphore.h>
 
 typedef pthread_t tid;
-typedef pthread_mutex_t fiber_mutex;
-typedef sem_t fiber_semaphore;
 
 /* Pushes a cleanup routine that should be executed once the thread calls fiber_thread_exit
  * or the thread is canceled by fiber_thread_cancel. The cleanup routines should be stored
@@ -46,111 +43,6 @@ typedef sem_t fiber_semaphore;
 #else
 #error "THREADING_LIB was not set to a valid value in config.mk"
 #endif /* FIBER_THREADING_LIB_PTHREAD */
-
-/** Semaphore functions **/
-
-/* Initialize a fiber_semaphore. Attempting to initialize an initailized semaphore
- * results in undefined behavior.
- * @param sem -> Pointer to the fiber_semaphore to initialize.
- * @param initial_value -> The initial value of the semaphore.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_ESEM_RNG -> initial_value was greater than the maximum semaphore value.
- */
-int fiber_sem_init(fiber_semaphore *sem, unsigned int initial_value);
-
-/* Destroys a fiber_semaphore. Attempting to destroy an uninitalized semaphore or a semaphore
- * callers are currently waiting on will result in undefined behavior.
- * @param sem -> Pointer to the fiber_semaphore to destroy.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_sem_destroy(fiber_semaphore *sem);
-
-/* Waits on an initialized fiber_semaphore. If the value of the semaphore is > 0, the semaphore
- * is decremented and the function returns immediately. If the value of the semaphore is <= 0,
- * the function blocks until other thread(s) call fiber_sem_post.
- * @param sem -> Pointer to the fiber_semaphore to wait on.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_EINTR -> An internal fiber error code that indicates the call was interrupted
- * by something (most likely a signal handler). The caller should retry if this is returned.
- */
-int fiber_sem_wait(fiber_semaphore *sem);
-
-/* Attempts waits on an initialized fiber_semaphore. If the value of the semaphore is > 0,
- * the semaphore is decremented and the function returns immediately. If the value of
- * the semaphore is <= 0, the function returns immediately with an error code.
- * @param sem -> Pointer to the fiber_semaphore to wait on.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_EINTR -> An internal fiber error code that indicates the call was interrupted
- * by something (most likely a signal handler). The caller should retry if this is returned.
- * @error FBR_EAGAIN -> An internal fiber error code that indicates the value of the semaphore
- * was <= 0 and could not be acquired.
- */
-int fiber_sem_trywait(fiber_semaphore *sem);
-
-/* Increments the value of an initialzed fiber_semaphore possibly waking a thread blocking in
- * fiber_sem_wait.
- * @param sem -> Pointer to the fiber_semaphore to post.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_sem_post(fiber_semaphore *sem);
-
-/* Gets the current value of an initialzed fiber_semaphore.
- * @param sem -> Pointer to the fiber_semaphore to get the current value. sem's memory
- * should not overlap with value_out's (restrict).
- * @param value_out -> Pointer to the int that will receive the semaphore's value.
- * value_out's memory should not overlap with sems's (restrict). If the semaphore's value is
- * <= 0, value_out may be given 0 or a negative number. POSIX permits either when the semaphore's
- * true value is <= 0.
- * @returns -> 0 if the call was successful, an error otherwise. 
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_sem_getvalue(fiber_semaphore *sem, int *value_out);
-
-/** Mutex functions **/
-
-/* Initialize a fiber_mutex. This function should only be called on a uninitalized mutex.
- * If it is called on an initialized mutex, it may fail depending on the implementation.
- * @param mut -> Pointer to the fiber_mutex to initialize.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @error FBR_ENO_RSC -> The system did not have resources to initialize the mutex.
- * @error FBR_EPTHRD_PERM -> The process does not have permission to initialize a mutex.
- * @error FBR_ENOMEM -> The system did not have sufficient memory to initialize the mutex.
- */
-int fiber_mutex_init(fiber_mutex *mut);
-
-/* Destroys an initialized fiber_mutex. This function should not be called on an uninitalized
- * or locked mutex. Both cases will result in undefined behavior.
- * @param mut -> Pointer to the fiber_mutex to destroy.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_mutex_destroy(fiber_mutex *mut);
-
-/* Locks an initialized fiber_mutex. This function should not be called on an uninitalized
- * or locked mutex. Both cases will result in undefined behavior.
- * @param mut -> Pointer to the fiber_mutex to lock.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_mutex_lock(fiber_mutex *mut);
-
-/* Unlocks an initialized fiber_mutex. This function should not be called on an uninitalized
- * or mutex that has already been unlockded. Both cases will result in undefined behavior.
- * @param mut -> Pointer to the fiber_mutex to unlock.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-int fiber_mutex_unlock(fiber_mutex *mut);
-
-/** Thread functions **/
 
 /* Creates and starts a new thread. The thread's id is placed in thread_id if the
  * thread was created successfully.

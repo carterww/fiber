@@ -29,16 +29,32 @@ PIC=1
 # Compile fiber_assert statements
 COMPILE_ASSERTS=1
 
-# boolean
-# Compile the default FIFO queue (include/fiber/fiber_fifo.h and src/queue/fifo.c)
-COMPILE_FIBER_FIFO_QUEUE=1
-
-# enum { pthread }
-# Underlying threading library to use
-THREADING_LIB=pthread
-
 # enum { gcc | clang }
 # Atomic operation implementation to use.
 # Note: gcc and clang use the same impl file so no need to switch between the
 # two if switching between the two as CC
 ATOMIC_OPERATIONS_IMPL=gcc
+
+# boolean
+# Compile the default FIFO queue (include/fiber/fiber_fifo.h and src/queue/fifo.c)
+COMPILE_FIBER_FIFO_QUEUE=1
+
+# enum { posix }
+# Underlying threading library to use
+THREAD_IMPL=posix
+
+# enum { posix }
+# Mutex implementation
+MUTEX_IMPL=posix
+
+# enum { posix }
+# Semaphore implementation
+SEMAPHORE_IMPL=posix
+
+# enum { posix }
+# Spinlock implementation
+SPINLOCK_IMPL=posix
+
+# enum { linux }
+# Futex implementation
+FUTEX_IMPL=linux

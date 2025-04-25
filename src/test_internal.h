@@ -22,18 +22,6 @@
 #if defined(FIBER_BUILD_ENV_TEST)
 
 struct fiber_threading_vtable {
-	int (*sem_init)(fiber_semaphore *, unsigned int);
-	int (*sem_destroy)(fiber_semaphore *);
-	int (*sem_wait)(fiber_semaphore *);
-	int (*sem_trywait)(fiber_semaphore *);
-	int (*sem_post)(fiber_semaphore *);
-	int (*sem_getvalue)(fiber_semaphore *, int *);
-
-	int (*mutex_init)(fiber_mutex *);
-	int (*mutex_destroy)(fiber_mutex *);
-	int (*mutex_lock)(fiber_mutex *);
-	int (*mutex_unlock)(fiber_mutex *);
-
 	int (*thread_create)(tid *, fiber_job_function_t, void *);
 	void (*thread_exit)(void *);
 	int (*thread_detach)(const tid *);

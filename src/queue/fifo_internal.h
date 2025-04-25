@@ -4,7 +4,8 @@
 #define _FIBER_FIFO_INTERNALS_H
 
 #include "fiber/fiber.h"
-#include "src/threading.h"
+#include "fiber_lock/mutex.h"
+#include "fiber_lock/semaphore.h"
 
 /* Definition of the opaque job queue pointer declared in fiber_fifo.h */
 struct fiber_fifo_jq {

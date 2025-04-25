@@ -4,6 +4,7 @@
 #define _FIBER_INTERNAL_H
 
 #include "fiber/fiber.h"
+#include "fiber_lock/mutex.h"
 #include "threading.h"
 
 /* Artificial limits that can be set by the user */
