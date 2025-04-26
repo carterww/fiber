@@ -60,7 +60,8 @@ static void validate_pool(struct fiber_pool *pool,
 	} while (i++ < 30);
 	/* Wait at most 1.5 seconds for the value to be correct */
 	TEST_ASSERT_EQUAL(opts->threads_number, curr_threads_number);
-	TEST_ASSERT_EQUAL(0, pool->threads_working);
+	TEST_ASSERT_EQUAL(0, pool->twql.counters.threads_working);
+	TEST_ASSERT_EQUAL(0, pool->twql.counters.queue_length);
 	TEST_ASSERT_EQUAL(0, pool->threads_kill_number);
 	TEST_ASSERT_EQUAL(opts->malloc, pool->malloc);
 	TEST_ASSERT_EQUAL(opts->free, pool->free);
@@ -76,7 +77,6 @@ static void validate_pool(struct fiber_pool *pool,
 	TEST_ASSERT_EQUAL(opts->queue_ops->pop, pool->queue_ops.pop);
 	TEST_ASSERT_EQUAL(opts->queue_ops->init, pool->queue_ops.init);
 	TEST_ASSERT_EQUAL(opts->queue_ops->free, pool->queue_ops.free);
-	TEST_ASSERT_EQUAL(opts->queue_ops->length, pool->queue_ops.length);
 }
 
 static void test_invalid_length_runner(tpsize threads_number,

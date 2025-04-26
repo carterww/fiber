@@ -6,6 +6,7 @@
 #include "fiber/fiber.h"
 #include "fiber_lock/mutex.h"
 #include "threading.h"
+#include "twql_packed.h"
 
 /* Artificial limits that can be set by the user */
 #define FIBER_QUEUE_LENGTH_INIT_MIN (1)
@@ -28,7 +29,7 @@ struct fiber_pool {
 	void *job_queue;
 	struct fiber_thread *thread_head; /* Guarded by pool's mutex */
 	tpsize threads_number; /* Only atomic LDR/STR */
-	tpsize threads_working; /* Only atomic LDR/STR */
+	union fiber_twql_packed twql; /* Only use this through twql_packed.h */
 	tpsize threads_kill_number; /* Only atomic LDR/STR */
 	malloc_function_t malloc;
 	free_function_t free;

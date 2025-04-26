@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#define static_assert(expr, message) \
+	typedef char static_assert_##message[(expr) ? 1 : -1]
+
 #if FIBER_COMPILE_ASSERTS != 0
 
 /* Assert macro used to ensure an assumption is true. This assert statement
@@ -27,7 +30,7 @@
 #define fiber_assert(expr) \
 	do {               \
 	} while (0)
-#endif
+#endif /* FIBER_COMPILE_ASSERTS != 0 */
 
 /* A panic macro that should be used when the program has entered an unrecoverable
  * state. It prints a debug statement to stderr and exits the program.

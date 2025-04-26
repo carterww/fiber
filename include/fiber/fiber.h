@@ -24,7 +24,7 @@ struct fiber_version {
 	int patch;
 };
 
-/* These types must be signed */
+/* These types must be signed. */
 typedef int tpsize; /* Threads in pool */
 typedef int qsize; /* Queue size */
 typedef long jid; /* Fiber job ID */
@@ -65,7 +65,6 @@ typedef int (*fiber_queue_pop_function_t)(void *queue, struct fiber_job *buffer,
 typedef struct fiber_queue_init_result (*fiber_queue_init_function_t)(
 	qsize capacity, malloc_function_t _malloc, free_function_t _free);
 typedef void (*fiber_queue_free_function_t)(void *queue);
-typedef qsize (*fiber_queue_length_function_t)(void *queue);
 
 /* Queue Vtable.
  * For more information on what these functions do/how they behave, see the README in
@@ -76,7 +75,6 @@ struct fiber_queue_operations {
 	fiber_queue_pop_function_t pop;
 	fiber_queue_init_function_t init;
 	fiber_queue_free_function_t free;
-	fiber_queue_length_function_t length;
 };
 
 struct fiber_pool_init_options {
@@ -170,8 +168,8 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
  * @error FBR_EAGAIN -> The queue is full and FIBER_QUEUE_BLOCK was not specified
  * in queue_flags.
  */
-jid fiber_job_push_raw(const struct fiber_pool *pool,
-		       const struct fiber_job *job, unsigned long queue_flags);
+jid fiber_job_push_raw(struct fiber_pool *pool, const struct fiber_job *job,
+		       unsigned long queue_flags);
 
 /* Frees the resources allocated by the pool. If you care about the work
  * being done by the threads in the pool, fiber_wait should be called first

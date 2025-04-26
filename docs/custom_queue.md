@@ -9,16 +9,15 @@ The queue is made up of two members in the pool:
 2. A VTable of the type struct fiber_queue_operations. These are the functions
    the pool calls when interacting with the queue.
 The VTable is provided by the user in fiber_init. For this reason, the queue's header
-file should be a part of the public API (notice fiber_fifo.h is in the project's include
-directory). This allows the user to pass you queue functions to fiber_init.
+file should be a part of the public API (see [fifo's header](include/fiber/fiber_fifo.h).
+This allows the user to pass you queue functions to fiber_init.
 
 ### VTable Functions
-A queue's VTable is made up of 5 functions:
+A queue's VTable is made up of 4 functions:
 1. **init**: Initializes the queue by allocating any necessary resources.
 2. **free**: Frees up any resources allocated by the pool.
 3. **push**: Pushes a job onto the queue to be popped at a later point.
 4. **pop**: Pops a job off the queue to be executed.
-5. **length**: Returns the number of jobs in the queue.
 
 ## Implementation Requirements
 As stated previously, Fiber expects certain behavior from a queue. If all these
@@ -33,7 +32,10 @@ requirements are met, your queue should seamlessly integrate into Fiber.
    - For *pop*, this means it should block until a job is available to remove and
      execute.
       - Blocking on *pop* is especially useful because it allows the thread to sleep
-        until a job is ready (if blocking = sleeping).
+        until a job is ready.
+- Fiber expects *init* to not add/remove jobs, *push* to add 1 job, and *pop* to remove
+  1 job if the operation succeeds. If your queue does more or less than that, fiber_wait
+  will not work properly.
 - If the function returns an int, a 0 value should be returned to indicate a success
   and a non-zero should be returned to indicate an error. An error value defined in
   fiber.h is preferred, but you can define custom errors that do not conflict with those.

@@ -62,6 +62,8 @@ clean:
 	@find build -type f -exec rm {} +
 	@find bin -type f -exec rm {} +
 	@find lib -type f -exec rm {} +
+
+clean_all: clean
 	@$(MAKE) -C deps/fiber_lock clean
 
 test_clean:
@@ -90,6 +92,10 @@ test_api: $(DIRS) $(TEST_API_ALL)
 
 test_queue: $(DIRS) $(TEST_QUEUE_ALL)
 
+test_internal: $(DIRS) $(TEST_INTERNAL_ALL)
+
+test_twql: $(DIRS) $(TEST_INTERNAL_TWQL_ALL)
+
 test_all: $(DIRS) $(TEST_ALL)
 
 define TARGET_COMPILE_TEST
@@ -99,4 +105,5 @@ endef
 
 $(foreach TEST_BIN,$(TEST_ALL),$(eval $(call TARGET_COMPILE_TEST,$(TEST_BIN))))
 
-.PHONY: all lib_static lib_so deps example clean test_clean test_result_clean test_run test_api
+.PHONY: all lib_static lib_so deps example clean clean_all test_clean test_result_clean \
+	test_run test_run_verbose test_api test_queue test_internal test_twql test_all

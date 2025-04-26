@@ -215,22 +215,6 @@ void fiber_queue_fifo_free(void *queue)
 	fq->free(fq);
 }
 
-qsize fiber_queue_fifo_length(void *queue)
-{
-	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
-	int sem_val;
-	int error_code;
-
-	fiber_assert(queue != NULL);
-
-	error_code = fiber_sem_getvalue(&fq->jobs_num, &sem_val);
-
-	if (error_code != 0 || sem_val <= 0) {
-		return 0;
-	}
-	return sem_val;
-}
-
 #if defined(FIBER_BUILD_ENV_TEST)
 #include "src/test_internal.h"
 struct fiber_test_internal_queue_fifo fiber_test_internal_queue_fifo = {

@@ -5,6 +5,7 @@
 #include "fiber_atomic/atomic.h"
 #include "threading.h"
 #include "thread_list.h"
+#include "twql_packed.h"
 #include "utils.h"
 #include "worker.h"
 
@@ -164,7 +165,7 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
 	}
 }
 
-void fiber_worker_wake_other(const struct fiber_pool *pool)
+void fiber_worker_wake_other(struct fiber_pool *pool)
 {
 	jid res;
 	static struct fiber_job wake_job = { FIBER_JID_MIN, fiber_wake_runner,
@@ -252,11 +253,9 @@ static void fiber_worker_loop(struct fiber_pool *pool,
 			pool->job_queue, &job_buffer, FIBER_QUEUE_BLOCK);
 		fiber_assert(queue_pop_res == 0);
 
-		(void)fiber_atomic_inc_fetch(&pool->threads_working,
-					     FIBER_ATOMIC_ACQ_REL);
+		fiber_twql_add(&pool->twql, 1, -1);
 		fiber_worker_execute_job(pool, thread, &job_buffer);
-		(void)fiber_atomic_dec_fetch(&pool->threads_working,
-					     FIBER_ATOMIC_ACQ_REL);
+		fiber_twql_threads_working_add(&pool->twql, -1);
 
 		/* Before calling pop and possibly falling asleep, handle any flags
                  * from pool.
@@ -281,18 +280,12 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 				     struct fiber_thread *thread,
 				     struct fiber_job *job)
 {
+	/* This will be used later */
 	(void)thread;
 	do {
-		tpsize to_kill;
+		int pop_res;
 		job->job_func(job->job_arg);
 
-		/* Speed is important here. I am prioritizing speed over getting the
-                 * most recent value 100% of the time by using RELAXED. This will be
-                 * checked later (once there are no jobs on the queue) with a stronger
-                 * memory ordering.
-                 */
-		to_kill = fiber_atomic_load(&pool->threads_kill_number,
-					    FIBER_ATOMIC_RELAXED);
 		/* The kill flag is high priority so we should check it before
                  * popping off more jobs. Speed is important here. I am prioritizing
                  * speed over getting the most recent value 100% of the time by using
@@ -303,8 +296,13 @@ static void fiber_worker_execute_job(struct fiber_pool *pool,
 			    pool, FIBER_ATOMIC_RELAXED)) {
 			break;
 		}
-	} while (pool->queue_ops.pop(pool->job_queue, job,
-				     FIBER_QUEUE_NO_BLOCK) == 0);
+		pop_res = pool->queue_ops.pop(pool->job_queue, job,
+					      FIBER_QUEUE_NO_BLOCK);
+		if (pop_res != 0) {
+			return;
+		}
+		fiber_twql_queue_length_add(&pool->twql, -1);
+	} while (1);
 }
 
 static int

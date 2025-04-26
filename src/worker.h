@@ -57,6 +57,6 @@ void fiber_workers_cancel(const struct fiber_pool *pool,
  * @note This function is only used to handle the case where the user wishes
  * to cancel threads but all of the threads are sleeping.
  */
-void fiber_worker_wake_other(const struct fiber_pool *pool);
+void fiber_worker_wake_other(struct fiber_pool *pool);
 
 #endif /* _FIBER_WORKER_H */

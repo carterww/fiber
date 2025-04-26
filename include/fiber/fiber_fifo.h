@@ -60,12 +60,6 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer,
  */
 void fiber_queue_fifo_free(void *queue);
 
-/* Returns the number of jobs in the queue.
- * @param queue -> Pointer to the job queue struct.
- * @returns The number of jobs in the queue.
- */
-qsize fiber_queue_fifo_length(void *queue);
-
 /* rvalue of a fiber_queue_operations that can be used to easily set
  * the VTable to the proper functions.
  */
@@ -73,7 +67,6 @@ qsize fiber_queue_fifo_length(void *queue);
 	{                                                             \
 		fiber_queue_fifo_push, fiber_queue_fifo_pop,          \
 			fiber_queue_fifo_init, fiber_queue_fifo_free, \
-			fiber_queue_fifo_length,                      \
 	}
 
 #endif /* _FIBER_QUEUE_FIFO_H */

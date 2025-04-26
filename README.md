@@ -14,7 +14,7 @@ file(s).
 ## Writing a Custom Job Queue
 Fiber provides a default [job queue implementation](include/fiber/fiber_fifo.h) that should fulfil most needs,
 but you can easily integrate a custom job queue into Fiber. If you are interested in writing
-your own job queue for fiber, please read the [requirements](src/queue/README.md).
+your own job queue for Fiber, please read the [requirements](docs/custom_queue.md).
 
 ## Selling Points
 Some of Fiber's selling points include:

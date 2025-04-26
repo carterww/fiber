@@ -7,6 +7,7 @@
 #include "fiber_internal.h"
 #include "fiber_atomic/atomic.h"
 #include "thread_list.h"
+#include "twql_packed.h"
 #include "utils.h"
 #include "worker.h"
 
@@ -21,6 +22,8 @@ static jid fiber_fetch_next_jid(jid *job_id_prev);
 
 static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 					   tpsize threads_number);
+
+static int fiber_wait_can_sleep(const struct fiber_pool *pool);
 
 struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 {
@@ -49,11 +52,11 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 	pool->queue_ops.pop = NULL;
 	pool->queue_ops.init = NULL;
 	pool->queue_ops.free = NULL;
-	pool->queue_ops.length = NULL;
 	pool->job_queue = NULL;
 	pool->thread_head = NULL;
 	pool->threads_number = 0;
-	pool->threads_working = 0;
+	pool->twql.counters.threads_working = 0;
+	pool->twql.counters.queue_length = 0;
 	pool->threads_kill_number = 0;
 	pool->malloc = opts->malloc;
 	pool->free = opts->free;
@@ -111,25 +114,46 @@ jid fiber_job_push(struct fiber_pool *pool, struct fiber_job *job,
 	return fiber_job_push_raw(pool, job, queue_flags);
 }
 
-jid fiber_job_push_raw(const struct fiber_pool *pool,
-		       const struct fiber_job *job, unsigned long queue_flags)
+jid fiber_job_push_raw(struct fiber_pool *pool, const struct fiber_job *job,
+		       unsigned long queue_flags)
 {
 	int push_res;
+	int is_waker_available;
 
 	if (pool == NULL || job == NULL || job->job_func == NULL ||
 	    pool->queue_ops.push == NULL) {
 		return FBR_ENULL_ARGS;
 	}
 
+	/* We optimistically add one to the queue length before actually adding the job.
+         * If we increment it after, there is a chance a thread calling fiber_wait
+         * will see a queue_length of 0 when it is actually 1. In this case, it may see
+         * a queue length of 1 when it actually 0. This is preferable because it prevents
+         * cases where a thread doesn't wait assuming the pool is done. However, this can
+         * cause a deadlock if the job push fails for whatever reason.
+         */
+	fiber_twql_queue_length_add(&pool->twql, 1);
 	push_res = pool->queue_ops.push(pool->job_queue, job, queue_flags);
-	switch (push_res) {
-	case 0:
-		break;
-	default:
-		fiber_assert(push_res < 0);
+	fiber_assert(push_res <= 0);
+	if (push_res == 0) {
+		return job->job_id;
+	}
+	/* Subtract one from the queue length because the push failed */
+	fiber_twql_queue_length_add(&pool->twql, -1);
+
+	/* Handle possible deadlock where a thread is blocking in fiber_wait (because it saw
+         * a queue_length > 0) but no waker is actually available.
+         *
+         * If a thread can go to sleep it means a waker will eventually wake it up. That means
+         * any thread that blocked under the false queue length will be woken up and we can
+         * exit. If that's not the case, we must wake them up.
+         */
+	is_waker_available = fiber_wait_can_sleep(pool);
+	if (is_waker_available) {
 		return push_res;
 	}
-	return job->job_id;
+	/* TODO: Check list of sleeping threads and wake them. Not sure how to do it yet */
+	return push_res;
 }
 
 void fiber_free(struct fiber_pool *pool)
@@ -162,13 +186,13 @@ int fiber_wait(struct fiber_pool *pool)
 
 qsize fiber_jobs_pending(const struct fiber_pool *pool)
 {
+	struct fiber_twql counters;
+
 	if (pool == NULL || pool->job_queue == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	if (pool->queue_ops.length == NULL) {
-		return FBR_EQUEOPS_NONE;
-	}
-	return pool->queue_ops.length(pool->job_queue);
+	counters = fiber_twql_load(&pool->twql, FIBER_ATOMIC_ACQUIRE);
+	return counters.queue_length;
 }
 
 int fiber_threads_remove(struct fiber_pool *pool, tpsize threads_num)
@@ -246,10 +270,13 @@ tpsize fiber_threads_number(const struct fiber_pool *pool)
 
 tpsize fiber_threads_working(const struct fiber_pool *pool)
 {
+	struct fiber_twql counters;
+
 	if (pool == NULL) {
 		return FBR_ENULL_ARGS;
 	}
-	return fiber_atomic_load(&pool->threads_working, FIBER_ATOMIC_ACQUIRE);
+	counters = fiber_twql_load(&pool->twql, FIBER_ATOMIC_ACQUIRE);
+	return counters.threads_working;
 }
 
 static int
@@ -268,8 +295,7 @@ fiber_validate_init_options(const struct fiber_pool_init_options *opts)
 		return FBR_EQUEOPS_NONE;
 	}
 	if (opts->queue_ops->push == NULL || opts->queue_ops->pop == NULL ||
-	    opts->queue_ops->init == NULL || opts->queue_ops->free == NULL ||
-	    opts->queue_ops->length == NULL) {
+	    opts->queue_ops->init == NULL || opts->queue_ops->free == NULL) {
 		return FBR_EQUEOPS_NONE;
 	}
 	if (opts->malloc == NULL || opts->free == NULL) {
@@ -296,7 +322,6 @@ static int fiber_init_queue(struct fiber_pool *pool,
 	pool->queue_ops.pop = ops->pop;
 	pool->queue_ops.init = ops->init;
 	pool->queue_ops.free = ops->free;
-	pool->queue_ops.length = ops->length;
 
 	queue_init_res =
 		ops->init(opts->queue_length, opts->malloc, opts->free);
@@ -368,6 +393,24 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 		return error_code;
 	}
 	return 0;
+}
+
+static int fiber_wait_can_sleep(const struct fiber_pool *pool)
+{
+	tpsize threads_number;
+	struct fiber_twql twql;
+
+	threads_number =
+		fiber_atomic_load(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
+	if (threads_number == 0) {
+		return 0;
+	}
+	twql = fiber_twql_load(&pool->twql, FIBER_ATOMIC_ACQUIRE);
+	if (twql.threads_working == 0 && twql.queue_length == 0) {
+		return 0;
+	}
+
+	return 1;
 }
 
 #if defined(FIBER_BUILD_ENV_TEST)
