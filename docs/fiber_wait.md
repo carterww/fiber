@@ -2,7 +2,7 @@
 This function has proven difficult to implement effectively for a couple of reasons:
 1. Threads execute jobs and update the pool's state in a lock-free manner which makes
    it difficult to pin down the pool's state for any period of time.
-2. There can be N waiters and M wakers where N,M >= 0. There is no guarantee that there
+2. There can be N waiters and M wakers where N, M >= 0. There is no guarantee that there
    will be a waker available to wake a waiter. This can lead to a deadlock if not handled
    carefully.
 
@@ -16,10 +16,10 @@ $T \geq t_{i}$ the condition $C$ is met:
 C_{1} = threads\_number = 0
 ```
 ```math
-C_{2} = threads\_working = 0 and queue\_length = 0
+C_{2} = threads\_working = 0 \; and \; queue\_length = 0
 ```
 ```math
-C = C_{1} or C_{2}
+C = C_{1} \; or \; C_{2}
 ```
 
 $C_{1}$ is by necessity: if there are not threads in the pool then no wakers will be available
@@ -62,7 +62,7 @@ say with any certainty that $C_{2}$ holds at $t_{j}$ or $t_{j + 1}$ because we s
 anything about the other variable at those times. This means we must do one of the following:
 1. Fetch both counts at the same time $t_{j}$.
 2. Fetch one count at $t_{j}$ and the other at $t_{j + 1}$ but ensure the first count cannot be
-   modified in the interval [$t_{j}$, $t_{j + 1}$].
+   modified in the interval \[ $t_{j}$, $t_{j + 1}$ ].
 
 ##### twql_packed
 Some architectures provide a means for atomically fetching two words. I want Fiber to be as portable
@@ -73,7 +73,7 @@ point in time. But how do we increment and decrement the counters?
 
 Packing the thread working count and queue length into 1 word makes increment and decrement operations
 on the individual components harder but not impossible. A simple CAS loop can be used to modify
-the packed word. See [twql_packed.h](src/twql_packed.h) for more details.
+the packed word. See [twql_packed.h](/src/twql_packed.h) for more details.
 
 #### Declaring the Intent Before Checking the Condition
 A waiter must declare its intent to wait before checking the condition and possibly returning early.
