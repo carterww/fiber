@@ -40,21 +40,29 @@ endif
 ifeq ($(MUTEX_IMPL),posix)
 C_CONFIG_FLAGS+=-D"FIBER_LOCK_MUTEX_POSIX"
 POSIX_C_SOURCE_REQUIREMENT=199506L
+else ifeq ($(MUTEX_IMPL),none)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_MUTEX_NONE"
 else
 $(error MUTEX_IMPL was invalid. Valid options: posix.)
 endif
 ifeq ($(SEMAPHORE_IMPL),posix)
 C_CONFIG_FLAGS+=-D"FIBER_LOCK_SEMAPHORE_POSIX"
+else ifeq ($(SEMAPHORE_IMPL),none)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_SEMAPHORE_NONE"
 else
 $(error SEMAPHORE_IMPL was invalid. Valid options: posix.)
 endif
 ifeq ($(SPINLOCK_IMPL),posix)
 C_CONFIG_FLAGS+=-D"FIBER_LOCK_SPIN_POSIX"
+else ifeq ($(SPINLOCK_IMPL),none)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_SPIN_NONE"
 else
 $(error SPINLOCK_IMPL was invalid. Valid options: posix.)
 endif
 ifeq ($(FUTEX_IMPL),linux)
 C_CONFIG_FLAGS+=-D"FIBER_LOCK_FUTEX_LINUX"
+else ifeq ($(FUTEX_IMPL),none)
+C_CONFIG_FLAGS+=-D"FIBER_LOCK_FUTEX_NONE"
 else
 $(error FUTEX_IMPL was invalid. Valid options: linux.)
 endif

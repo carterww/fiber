@@ -43,18 +43,18 @@ COMPILE_FIBER_FIFO_QUEUE=1
 # Underlying threading library to use
 THREAD_IMPL=posix
 
-# enum { posix }
+# enum { posix | none }
 # Mutex implementation
 MUTEX_IMPL=posix
 
-# enum { posix }
+# enum { posix | none }
 # Semaphore implementation
 SEMAPHORE_IMPL=posix
 
-# enum { posix }
+# enum { posix | none }
 # Spinlock implementation
-SPINLOCK_IMPL=posix
+SPINLOCK_IMPL=none
 
-# enum { linux }
+# enum { linux | none }
 # Futex implementation
-FUTEX_IMPL=linux
+FUTEX_IMPL=none
