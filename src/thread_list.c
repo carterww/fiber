@@ -2,10 +2,10 @@
 
 #include <stddef.h>
 
+#include "debug.h"
 #include "fiber/fiber.h"
 #include "fiber_internal.h"
 #include "thread_list.h"
-#include "utils.h"
 
 struct fiber_thread_list_init_result
 fiber_thread_list_alloc(tpsize threads_number, malloc_function_t _malloc)

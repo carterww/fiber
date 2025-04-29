@@ -67,7 +67,7 @@ else
 $(error ATOMIC_OPERATIONS_IMPL in config.mk was invalid)
 endif
 
-OBJ = fiber.o thread_list.o version.o worker.o capability.o $(QUEUE_OBJS) $(THREADING_OBJ)
+OBJ = fiber.o thread_list.o version.o worker.o capability.o wait.o $(QUEUE_OBJS) $(THREADING_OBJ)
 OBJ_OUT = $(patsubst %, build/%, $(OBJ))
 
 Q = @

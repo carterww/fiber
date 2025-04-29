@@ -3,9 +3,9 @@
 #ifndef _FIBER_TWORKING_QLENGTH_PACKED_H
 #define _FIBER_TWORKING_QLENGTH_PACKED_H
 
+#include "debug.h"
 #include "fiber/fiber.h"
 #include "fiber_atomic/atomic.h"
-#include "utils.h"
 
 struct fiber_twql {
 	tpsize threads_working;

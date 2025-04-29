@@ -1,7 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
-#ifndef _FIBER_UTILS_H
-#define _FIBER_UTILS_H
+#ifndef _FIBER_DEBUG_H
+#define _FIBER_DEBUG_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,13 +17,13 @@
  * If the assertion fails, a debug statement is printed to stderr and the
  * program exits.
  */
-#define fiber_assert(expr)                                                \
-	do {                                                              \
-		if (!(expr)) {                                            \
-			fprintf(stderr, "[%s:%d]: Assertion failed %s\n", \
-				__FILE__, __LINE__, #expr);               \
-			exit(1);                                          \
-		}                                                         \
+#define fiber_assert(expr)                                                   \
+	do {                                                                 \
+		if (!(expr)) {                                               \
+			fprintf(stderr, "[%s:%d]: Assertion failed -> %s\n", \
+				__FILE__, __LINE__, #expr);                  \
+			exit(1);                                             \
+		}                                                            \
 	} while (0)
 
 #else
@@ -41,4 +41,4 @@
 		exit(1);                                                 \
 	} while (0)
 
-#endif /* _FIBER_UTILS_H */
+#endif /* _FIBER_DEBUG_H */

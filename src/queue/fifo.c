@@ -7,7 +7,7 @@
 #include "fiber_lock/mutex.h"
 #include "fiber_lock/semaphore.h"
 #include "fifo_internal.h"
-#include "src/utils.h"
+#include "src/debug.h"
 
 struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 						     malloc_function_t _malloc,

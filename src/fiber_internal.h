@@ -31,6 +31,7 @@ struct fiber_pool {
 	tpsize threads_number; /* Only atomic LDR/STR */
 	union fiber_twql_packed twql; /* Only use this through twql_packed.h */
 	tpsize threads_kill_number; /* Only atomic LDR/STR */
+	unsigned long fiber_wait_epoch; /* Only use this through epoch.h */
 	malloc_function_t malloc;
 	free_function_t free;
 };

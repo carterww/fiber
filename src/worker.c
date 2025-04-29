@@ -1,12 +1,12 @@
 /* See LICENSE file for copyright and license details. */
 
+#include "debug.h"
 #include "fiber/fiber.h"
 #include "fiber_internal.h"
 #include "fiber_atomic/atomic.h"
 #include "threading.h"
 #include "thread_list.h"
 #include "twql_packed.h"
-#include "utils.h"
 #include "worker.h"
 
 static void fiber_worker_runner_cleanup(void *fiber_worker_thread_arg);

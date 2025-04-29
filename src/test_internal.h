@@ -15,6 +15,7 @@
  */
 #if defined(FIBER_BUILD_ENV_TEST)
 
+#include "bitstring.h"
 #include "fiber/fiber.h"
 #include "fiber_atomic/atomic.h"
 #include "fiber_internal.h"
@@ -23,8 +24,7 @@
 #include "worker.h"
 
 struct fiber_test_internal_capability {
-	unsigned char *capability_bitstring;
-	size_t capability_bitstring_size;
+	struct fiber_bitstring *capability_bitstring;
 };
 
 struct fiber_test_internal_fiber {

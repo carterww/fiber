@@ -3,12 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "debug.h"
 #include "fiber/fiber.h"
-#include "fiber_internal.h"
 #include "fiber_atomic/atomic.h"
+#include "fiber_internal.h"
 #include "thread_list.h"
 #include "twql_packed.h"
-#include "utils.h"
+#include "wait.h"
 #include "worker.h"
 
 static int
@@ -22,8 +23,6 @@ static jid fiber_fetch_next_jid(jid *job_id_prev);
 
 static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 					   tpsize threads_number);
-
-static int fiber_wait_can_sleep(const struct fiber_pool *pool);
 
 struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 {
@@ -58,6 +57,7 @@ struct fiber_init_result fiber_init(const struct fiber_pool_init_options *opts)
 	pool->twql.counters.threads_working = 0;
 	pool->twql.counters.queue_length = 0;
 	pool->threads_kill_number = 0;
+	pool->fiber_wait_epoch = 0;
 	pool->malloc = opts->malloc;
 	pool->free = opts->free;
 
@@ -143,13 +143,8 @@ jid fiber_job_push_raw(struct fiber_pool *pool, const struct fiber_job *job,
 
 	/* Handle possible deadlock where a thread is blocking in fiber_wait (because it saw
          * a queue_length > 0) but no waker is actually available.
-         *
-         * If a thread can go to sleep it means a waker will eventually wake it up. That means
-         * any thread that blocked under the false queue length will be woken up and we can
-         * exit. If that's not the case, we must wake them up.
          */
-	is_waker_available = fiber_wait_can_sleep(pool);
-	if (is_waker_available) {
+	if (fiber_wait_will_be_woken(pool)) {
 		return push_res;
 	}
 	/* TODO: Check list of sleeping threads and wake them. Not sure how to do it yet */
@@ -393,24 +388,6 @@ static int fiber_thread_pool_start_threads(struct fiber_pool *pool,
 		return error_code;
 	}
 	return 0;
-}
-
-static int fiber_wait_can_sleep(const struct fiber_pool *pool)
-{
-	tpsize threads_number;
-	struct fiber_twql twql;
-
-	threads_number =
-		fiber_atomic_load(&pool->threads_number, FIBER_ATOMIC_ACQUIRE);
-	if (threads_number == 0) {
-		return 0;
-	}
-	twql = fiber_twql_load(&pool->twql, FIBER_ATOMIC_ACQUIRE);
-	if (twql.threads_working == 0 && twql.queue_length == 0) {
-		return 0;
-	}
-
-	return 1;
 }
 
 #if defined(FIBER_BUILD_ENV_TEST)

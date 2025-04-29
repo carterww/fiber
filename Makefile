@@ -28,8 +28,7 @@ lib/lib$(TARGET).so: lib $(BUILD_DIRS) $(OBJ_OUT)
 	@printf "CC -shared $@\n"
 
 example: lib/lib$(TARGET).a $(FIBER_LOCK_LIB_STATIC_OUT) build/example.o $(BIN_DIRS)
-	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) $(word 3,$^) -L. -l:$(word 1,$^) \
-		-l:$(FIBER_LOCK_LIB_STATIC_OUT) -o bin/$@
+	$(Q)$(CC) $(C_FLAGS) $(LD_FLAGS) $(word 3,$^) -L. -l:$(word 1,$^) -l:$(FIBER_LOCK_LIB_STATIC_OUT) -o bin/$@
 
 # This code is external and has warnings so I will not use those flags here
 build/test/unity.o: C_FLAGS:=$(filter-out $(C_WARNING_FLAGS) std=c89, $(C_FLAGS))
@@ -94,6 +93,8 @@ test_queue: $(DIRS) $(TEST_QUEUE_ALL)
 
 test_internal: $(DIRS) $(TEST_INTERNAL_ALL)
 
+test_bitstring: $(DIRS) $(TEST_INTERNAL_BITSTRING_ALL)
+
 test_twql: $(DIRS) $(TEST_INTERNAL_TWQL_ALL)
 
 test_all: $(DIRS) $(TEST_ALL)
@@ -106,4 +107,5 @@ endef
 $(foreach TEST_BIN,$(TEST_ALL),$(eval $(call TARGET_COMPILE_TEST,$(TEST_BIN))))
 
 .PHONY: all lib_static lib_so deps example clean clean_all test_clean test_result_clean \
-	test_run test_run_verbose test_api test_queue test_internal test_twql test_all
+	test_run test_run_verbose test_api test_queue test_internal test_bitstring test_twql \
+	test_all

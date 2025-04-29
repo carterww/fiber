@@ -4,9 +4,9 @@
 #include <pthread.h>
 #include <stddef.h>
 
+#include "debug.h"
 #include "fiber/fiber.h"
 #include "threading.h"
-#include "utils.h"
 
 /* This is here to support the threading_fault module in test/mock/threading.
  * Redefining these functions and putting them into a vtable allows us to use
