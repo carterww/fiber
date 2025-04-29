@@ -83,6 +83,30 @@ fiber_bitstring_get_atomic(const struct fiber_bitstring *bs, size_t bit_num,
 	return word & ((fiber_bitstring_word)1 << shift);
 }
 
+static fiber_bitstring_word
+fiber_bitstring_word_get(const struct fiber_bitstring *bs, size_t word_idx)
+{
+	size_t idx;
+
+	fiber_assert(bs != NULL);
+	fiber_assert(word_idx < bs->word_num);
+
+	return bs->words[word_idx];
+}
+
+static fiber_bitstring_word
+fiber_bitstring_word_get_atomic(const struct fiber_bitstring *bs,
+				size_t word_idx,
+				enum fiber_atomic_memorder memorder)
+{
+	size_t idx;
+
+	fiber_assert(bs != NULL);
+	fiber_assert(word_idx < bs->word_num);
+
+	return fiber_atomic_load(&bs->words[word_idx], memorder);
+}
+
 static void fiber_bitstring_set(struct fiber_bitstring *bs, size_t bit_num,
 				int value)
 {
