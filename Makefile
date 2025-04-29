@@ -93,6 +93,8 @@ test_queue: $(DIRS) $(TEST_QUEUE_ALL)
 
 test_internal: $(DIRS) $(TEST_INTERNAL_ALL)
 
+test_aligned_alloc: $(DIRS) $(TEST_INTERNAL_ALIGNED_ALLOC_ALL)
+
 test_bitstring: $(DIRS) $(TEST_INTERNAL_BITSTRING_ALL)
 
 test_twql: $(DIRS) $(TEST_INTERNAL_TWQL_ALL)
@@ -107,5 +109,5 @@ endef
 $(foreach TEST_BIN,$(TEST_ALL),$(eval $(call TARGET_COMPILE_TEST,$(TEST_BIN))))
 
 .PHONY: all lib_static lib_so deps example clean clean_all test_clean test_result_clean \
-	test_run test_run_verbose test_api test_queue test_internal test_bitstring test_twql \
-	test_all
+	test_run test_run_verbose test_api test_queue test_internal test_aligned_alloc \
+	test_bitstring test_twql test_all
