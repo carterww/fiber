@@ -19,7 +19,6 @@
 #include "fiber/fiber.h"
 #include "fiber_atomic/atomic.h"
 #include "fiber_internal.h"
-#include "fiber_lock/mutex.h"
 #include "fiber_lock/semaphore.h"
 #include "worker.h"
 
@@ -44,8 +43,7 @@ struct fiber_test_internal_fiber {
 struct fiber_test_internal_queue_fifo {
 	void (*fiber_queue_sem_wait)(fiber_semaphore *sem);
 	int (*fiber_queue_sem_trywait)(fiber_semaphore *sem);
-	qsize (*fiber_queue_fetch_increment)(fiber_mutex *mtx, qsize *target,
-					     qsize cap);
+	qsize (*fiber_queue_fetch_increment)(qsize *target, qsize cap);
 };
 
 #if defined(FIBER_THREADING_LIB_PTHREAD)

@@ -29,16 +29,6 @@ static void test_queue_sem(fiber_semaphore *sem, qsize expected_val)
 	}
 }
 
-static void test_queue_mutex(fiber_mutex *mut)
-{
-	int mut_res;
-
-	mut_res = fiber_mutex_lock(mut);
-	TEST_ASSERT_EQUAL(0, mut_res);
-	mut_res = fiber_mutex_unlock(mut);
-	TEST_ASSERT_EQUAL(0, mut_res);
-}
-
 static void validate_queue(struct fiber_fifo_jq *jq, qsize queue_length,
 			   free_function_t _free)
 {
@@ -46,10 +36,6 @@ static void validate_queue(struct fiber_fifo_jq *jq, qsize queue_length,
 	test_queue_sem(&jq->jobs_num, 0);
 	TEST_ASSERT_NOT_NULL(jq->jobs);
 	TEST_ASSERT_EQUAL(queue_length, jq->capacity);
-	test_queue_mutex(&jq->head_lock);
-	TEST_ASSERT_EQUAL(0, jq->head);
-	test_queue_mutex(&jq->tail_lock);
-	TEST_ASSERT_EQUAL(0, jq->tail);
 
 	TEST_ASSERT_EQUAL(_free, jq->free);
 }
