@@ -42,7 +42,6 @@ static void *test_bitstring_atomic_set_multi_threaded_worker(void *v_arg)
 {
 	struct test_bitstring_atomic_set_multi_threaded_arg *arg;
 	size_t i;
-	size_t *bc;
 	fiber_semaphore *s, *e;
 
 	arg = (struct test_bitstring_atomic_set_multi_threaded_arg *)v_arg;
@@ -60,6 +59,7 @@ static void *test_bitstring_atomic_set_multi_threaded_worker(void *v_arg)
 		}
 		TEST_ASSERT_FALSE(fiber_sem_post_fn_ptr(e));
 	}
+	pthread_exit(NULL);
 	return NULL;
 }
 
@@ -107,6 +107,9 @@ void test_bitstring_atomic_set_multi_threaded(void)
 		TEST_ASSERT_FALSE(fiber_thread_join_fn_ptr(&tids[i], &res));
 		(void)res;
 	}
+
+	TEST_ASSERT_FALSE(fiber_sem_destroy_fn_ptr(&start_sem));
+	TEST_ASSERT_FALSE(fiber_sem_destroy_fn_ptr(&end_sem));
 }
 
 static void test_bitstring_atomic_get_runner(fiber_bitstring_word init_bit,

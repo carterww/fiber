@@ -59,19 +59,23 @@ Threads can be added and removed from the pool after initialization. This allows
 scaled appropriately without needing to create a new pool or free an existing one.
 
 ### Minimal Lock Contention and Small Critical Sections
-Locks are used in one place\*:
+Locks are used in two places:
 1. Adding or removing threads from the pool. Threads are in a linked list and the head is
    protected by a mutex.
+2. Fetching and incrementing the head/tail pointers in the FIFO queue implementation.
 
 The first case is very rare: it only affects dynamic thread scaling and thread cleanup
-routines.
+routines. The second case is very common, but the critical section is made up of a load,
+store, addition, and modulo. There is also an implicit memory barrier on either side of
+that sequence so the cost is greater than it may appear.
 
 Fiber heavily relies on atomic operations instead of locks for frequently accessed/updated
 variables. This is usually faster, but it comes with a major downside: these variables can't
 be trusted after loading them.
 
-\*The fifo queue uses semaphores to protect its buffer and put callers to sleep if the
-operation cannot complete. This is technically a lock, but its main use is for sleeping.
+My goal is to write a lock free queue for Fiber after testing to eliminate the second case
+listed above.
+
 ### Designed for Portability
 Fiber is written in C89 and the source attempts to stick to it. Calls to nonstandard
 functions are hidden in files that can be swapped out at build time like

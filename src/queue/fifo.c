@@ -1,6 +1,8 @@
 /* See LICENSE file for copyright and license details. */
 
+#include "fiber_lock/mutex.h"
 #include <limits.h>
+#include <pthread.h>
 
 #include "fiber/fiber.h"
 #include "fiber/fiber_fifo.h"
@@ -17,6 +19,8 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 	struct fiber_job *jobs = NULL;
 	int sem_void_res = 1;
 	int sem_jobs_res = 1;
+	int mutex_res = 1;
+	unsigned int ucap;
 	struct fiber_queue_init_result res = { 0, NULL };
 
 	fiber_assert(capacity > 0);
@@ -24,17 +28,19 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 	fiber_assert(_malloc != NULL);
 	fiber_assert(_free != NULL);
 
+	ucap = (unsigned int)capacity;
+
 	fq = _malloc(sizeof(*fq));
 	if (fq == NULL) {
 		res.error = FBR_ENOMEM;
 		goto err;
 	}
-	jobs = _malloc((unsigned long)capacity * sizeof(*jobs));
+	jobs = _malloc(ucap * sizeof(*jobs));
 	if (jobs == NULL) {
 		res.error = FBR_ENOMEM;
 		goto err;
 	}
-	sem_void_res = fiber_sem_init(&fq->void_num, (unsigned int)capacity);
+	sem_void_res = fiber_sem_init(&fq->void_num, ucap);
 	if (sem_void_res != 0) {
 		res.error = sem_void_res;
 		goto err;
@@ -42,6 +48,11 @@ struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 	sem_jobs_res = fiber_sem_init(&fq->jobs_num, 0);
 	if (sem_jobs_res != 0) {
 		res.error = sem_jobs_res;
+		goto err;
+	}
+	mutex_res = fiber_mutex_init(&fq->lock);
+	if (mutex_res != 0) {
+		res.error = mutex_res;
 		goto err;
 	}
 
@@ -67,6 +78,10 @@ err:
 	}
 	if (sem_jobs_res == 0) {
 		int des_res = fiber_sem_destroy(&fq->jobs_num);
+		fiber_assert(des_res == 0);
+	}
+	if (mutex_res == 0) {
+		int des_res = fiber_mutex_destroy(&fq->lock);
 		fiber_assert(des_res == 0);
 	}
 	return res;
@@ -97,16 +112,22 @@ static int fiber_queue_sem_trywait(fiber_semaphore *sem)
 
 static qsize fiber_queue_fetch_increment(qsize *target, qsize cap)
 {
-	int lock_res;
-	qsize target_old, target_new;
+	qsize target_current;
 
-	target_old = fiber_atomic_load(target, FIBER_ATOMIC_ACQUIRE);
-	do {
-		target_new = (target_old + 1) % cap;
-	} while (!fiber_atomic_cmp_xchng(target, &target_old, target_new, 1,
-					 FIBER_ATOMIC_ACQ_REL,
-					 FIBER_ATOMIC_ACQUIRE));
-	return target_old;
+	target_current = *target;
+	*target = (*target + 1) % cap;
+
+	return target_current;
+	/*
+	   qsize target_old, target_new;
+
+	   target_old = fiber_atomic_load(target, FIBER_ATOMIC_ACQUIRE);
+	   do {
+	   target_new = (target_old + 1) % cap;
+	   } while (!fiber_atomic_cmp_xchng(target, &target_old, target_new, 1, FIBER_ATOMIC_ACQ_REL, FIBER_ATOMIC_ACQUIRE));
+
+	   return target_old;
+	 */
 }
 
 int fiber_queue_fifo_push(void *queue, const struct fiber_job *job,
@@ -131,9 +152,11 @@ int fiber_queue_fifo_push(void *queue, const struct fiber_job *job,
 	}
 
 	/* Fetch old tail and increment its value */
+	fiber_assert(fiber_mutex_lock(&fq->lock) == 0);
 	tail = fiber_queue_fetch_increment(&fq->tail, fq->capacity);
 
 	fq->jobs[tail] = *job;
+	fiber_assert(fiber_mutex_unlock(&fq->lock) == 0);
 	post_res = fiber_sem_post(&fq->jobs_num);
 	fiber_assert(post_res == 0);
 	return 0;
@@ -145,7 +168,7 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer,
 	struct fiber_fifo_jq *fq = (struct fiber_fifo_jq *)queue;
 	int post_res;
 	int lock_res;
-	int head;
+	qsize head;
 
 	fiber_assert(queue != NULL);
 	fiber_assert(buffer != NULL);
@@ -160,9 +183,11 @@ int fiber_queue_fifo_pop(void *queue, struct fiber_job *buffer,
 	}
 
 	/* Fetch old head and increment its value */
+	fiber_assert(fiber_mutex_lock(&fq->lock) == 0);
 	head = fiber_queue_fetch_increment(&fq->head, fq->capacity);
 
 	*buffer = fq->jobs[head];
+	fiber_assert(fiber_mutex_unlock(&fq->lock) == 0);
 	post_res = fiber_sem_post(&fq->void_num);
 	fiber_assert(post_res == 0);
 	return 0;
@@ -180,6 +205,9 @@ void fiber_queue_fifo_free(void *queue)
 	fiber_assert(des_res == 0);
 
 	des_res = fiber_sem_destroy(&fq->void_num);
+	fiber_assert(des_res == 0);
+
+	des_res = fiber_mutex_destroy(&fq->lock);
 	fiber_assert(des_res == 0);
 
 	fq->free(fq);
