@@ -1,7 +1,7 @@
 /* See LICENSE file for copyright and license details. */
 
-#ifndef _FIBER_DEBUG_H
-#define _FIBER_DEBUG_H
+#ifndef _FIBER_INTERNAL_DEBUG_H
+#define _FIBER_INTERNAL_DEBUG_H
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,7 +9,7 @@
 #define static_assert(expr, message) \
 	typedef char static_assert_##message[(expr) ? 1 : -1]
 
-#if FIBER_COMPILE_ASSERTS != 0
+#if FIBER_BUILD_OPT_COMPILE_ASSERTS != 0
 
 /* Assert macro used to ensure an assumption is true. This assert statement
  * is used when expr must be true. If it is false, the program cannot continue
@@ -41,4 +41,4 @@
 		exit(1);                                                 \
 	} while (0)
 
-#endif /* _FIBER_DEBUG_H */
+#endif /* _FIBER_INTERNAL_DEBUG_H */

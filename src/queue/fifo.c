@@ -1,15 +1,15 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "fiber_lock/mutex.h"
 #include <limits.h>
 #include <pthread.h>
 
+#include "debug.h"
 #include "fiber/fiber.h"
 #include "fiber/fiber_fifo.h"
 #include "fiber_atomic/atomic.h"
-#include "fiber_lock/semaphore.h"
 #include "fifo_internal.h"
-#include "src/debug.h"
+#include "mutex.h"
+#include "sem.h"
 
 struct fiber_queue_init_result fiber_queue_fifo_init(qsize capacity,
 						     malloc_function_t _malloc,

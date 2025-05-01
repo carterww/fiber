@@ -6,8 +6,6 @@
 #include <limits.h>
 #include <stddef.h>
 
-#include "fiber_lock/errno.h"
-
 /* Some test suites redefine these before including fiber.h to test
  * with different header versions. This is a simple but scuffed way
  * to avoid redefining them.
@@ -97,12 +95,10 @@ struct fiber_init_result {
 enum fiber_capability_option {
 	FIBER_CAPABILITY_ASSERTS = 0,
 	FIBER_CAPABILITY_FIBER_FIFO_QUEUE = 1,
-	FIBER_CAPABILITY_BUILD_ENV_NORM = 2,
+	FIBER_CAPABILITY_BUILD_ENV_REL = 2,
 	FIBER_CAPABILITY_BUILD_ENV_DEBUG = 3,
 	FIBER_CAPABILITY_BUILD_ENV_TEST = 4,
 	FIBER_CAPABILITY_THREADING_LIB_PTHREAD = 5,
-	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC = 6,
-	FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG = 7,
 
 	/* This should always be the last one */
 	FIBER_CAPABILITY_ENUM_END
@@ -307,20 +303,16 @@ static int fiber_libversion_compatible(void)
 #define FBR_EPOOL_UNINIT (-10)
 #define FBR_ETHRD_LIMIT (-11)
 #define FBR_ENO_ALLOC (-12)
-
-/* Error codes pulled from fiber_lock to avoid the cost
- * of conversion. These are given the range -1,050 to -1,000
- */
-#define FBR_ENO_RSC (FBR_LOCK_ENO_RSC)
-#define FBR_EPTHRD_PERM (FBR_LOCK_EPTHRD_PERM)
-#define FBR_ENOMEM (FBR_LOCK_ENOMEM)
-#define FBR_EBUSY (FBR_LOCK_EBUSY)
-#define FBR_ESEM_RNG (FBR_LOCK_ESEM_RNG)
-#define FBR_EAGAIN (FBR_LOCK_EAGAIN)
-#define FBR_EINTR (FBR_LOCK_EINTR)
-#define FBR_EDEADLK (FBR_LOCK_EDEADLK)
-#define FBR_ETIMEDOUT (FBR_LOCK_ETIMEDOUT)
-#define FBR_EINVAL (FBR_LOCK_EINVAL)
+#define FBR_ENO_RSC (-13)
+#define FBR_EPTHRD_PERM (-14)
+#define FBR_ENOMEM (-15)
+#define FBR_EBUSY (-16)
+#define FBR_ESEM_RNG (-17)
+#define FBR_EAGAIN (-18)
+#define FBR_EINTR (-19)
+#define FBR_EDEADLK (-20)
+#define FBR_ETIMEDOUT (-21)
+#define FBR_EINVAL (-22)
 
 /* Job Queue Flags */
 #define FIBER_QUEUE_BLOCK (1UL << 31)

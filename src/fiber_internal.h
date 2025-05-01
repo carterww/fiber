@@ -4,7 +4,7 @@
 #define _FIBER_INTERNAL_H
 
 #include "fiber/fiber.h"
-#include "fiber_lock/mutex.h"
+#include "mutex.h"
 #include "threading.h"
 #include "twql_packed.h"
 

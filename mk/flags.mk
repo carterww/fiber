@@ -20,7 +20,7 @@ C_SECURITY_FLAGS = -fstack-protector-strong -fstack-clash-protection \
 
 C_DEBUG_FLAGS = -fsanitize=undefined -fno-omit-frame-pointer
 		   
-C_INCLUDE_FLAGS = -I. -I./include -I./deps/fiber_atomic/include -I./deps/fiber_lock/include
+C_INCLUDE_FLAGS = -I. -I./src/internal -I./include -I./deps/fiber_atomic/include -I./deps/fiber_lock/include
 
 LD_SECURITY_FLAGS = -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code
 

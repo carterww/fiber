@@ -1,0 +1,37 @@
+/* See LICENSE file for copyright and license details. */
+
+#ifndef _FIBER_INTERNAL_COMPILER_H
+#define _FIBER_INTERNAL_COMPILER_H
+
+/* clang also defined __GNUC__ because it's "compatible" but I want to
+ * know if it is really gcc.
+ */
+#if defined(__GNUC__) && !defined(__clang__)
+#define FIBER_COMPILER_GCC
+#elif defined(__clang__)
+#define FIBER_COMPILER_CLANG
+#endif
+
+#if defined(FIBER_COMPILER_GCC) || defined(FIBER_COMPILER_CLANG)
+
+#define fbr_alignof(t) __alignof__(t)
+#define fbr_typeof(e) __typeof__(e)
+#define fbr_expect(expr, expect) __builtin_expect(expr, expect)
+
+#define fbr_compiler_barrier() __asm__ __volatile__ ("" ::: "memory");
+#define fbr_unreachable() __builtin_unreachable
+#define fbr_assume_aligned(p, a) __builtin_assume_aligned(p, a)
+#define fbr_prefetch(p) __builtin_prefetch(p)
+
+#define fbr_attr_aligned(a) __attribute__((aligned(a)))
+#define fbr_attr_alloc_aligned(arg_p) __attribute__((alloc_align(arg_p)))
+#define fbr_attr_noreturn __attribute__((noreturn))
+#define fbr_attr_always_inline __attribute__((always_inline))
+#define fbr_attr_cold __attribute__((cold))
+#define fbr_attr_hot __attribute__((hot))
+#define fbr_attr_const __attribute__((const))
+#define fbr_attr_weak __attribute__((weak))
+
+#endif /* gcc or clang */
+
+#endif /* _FIBER_INTERNAL_COMPILER_H */

@@ -5,7 +5,7 @@
 
 #include "fiber/fiber.h"
 
-#if defined(FIBER_THREADING_LIB_PTHREAD)
+#if defined(FIBER_BUILD_OPT_THREAD_IMPL_POSIX)
 
 #include <pthread.h>
 
