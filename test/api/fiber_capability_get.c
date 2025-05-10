@@ -37,15 +37,11 @@ void test_capability_current_build(void)
 
 	asserts = fiber_capability_get(FIBER_CAPABILITY_ASSERTS);
 	fifo_queue = fiber_capability_get(FIBER_CAPABILITY_FIBER_FIFO_QUEUE);
-	env_norm = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_NORM);
+	env_norm = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_REL);
 	env_debug = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_DEBUG);
 	env_test = fiber_capability_get(FIBER_CAPABILITY_BUILD_ENV_TEST);
 	lib_pthread =
 		fiber_capability_get(FIBER_CAPABILITY_THREADING_LIB_PTHREAD);
-	atomic_gcc = fiber_capability_get(
-		FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_GCC);
-	atomic_clang = fiber_capability_get(
-		FIBER_CAPABILITY_ATOMIC_OPERATIONS_IMPL_CLANG);
 
 	TEST_ASSERT_FALSE(CLAMP_BOOL(asserts) ^
 			  CLAMP_BOOL(FIBER_COMPILE_ASSERTS));

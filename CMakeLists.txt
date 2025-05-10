@@ -7,6 +7,11 @@ project(fiber VERSION 0.2.1)
 # Pthreads required
 find_package(Threads REQUIRED)
 
+find_library(CK_LIBRARY ck PATHS /usr/local/lib /usr/lib REQUIRED)
+get_filename_component(CK_LIB_DIR ${CK_LIBRARY} DIRECTORY)
+get_filename_component(CK_ROOT ${CK_LIB_DIR} DIRECTORY)
+set(CK_INCLUDE_DIR "${CK_ROOT}/include")
+
 function(create_build_bool_option opt_name desc default)
     option(${opt_name} ${desc} ${default})
     if(${opt_name})
@@ -157,6 +162,7 @@ add_link_options(${LINKER_SECURITY_FLAGS})
 set_property(GLOBAL PROPERTY POSITION_INDEPENDENT_CODE ${PIC})
 
 add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
+target_link_libraries(${PROJECT_NAME} ${CK_LIBRARY})
 
 # Boolean options
 create_build_bool_option(COMPILE_ASSERTS
@@ -206,8 +212,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 target_include_directories(${PROJECT_NAME} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/src/internal
-    ${CMAKE_CURRENT_SOURCE_DIR}/deps/fiber_atomic/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/deps/fiber_lock/include
+    ${CK_INCLUDE_DIR}
 )
 
 add_executable(example src/example.c)

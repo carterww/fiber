@@ -1,7 +1,7 @@
 #ifndef _FIBER_TEST_MOCK_THREADING_TRACE_FAULT_H
 #define _FIBER_TEST_MOCK_THREADING_TRACE_FAULT_H
 
-#include "fiber_lock/mutex.h"
+#include "mutex.h"
 
 struct threading_trace_fault_fail_after {
 	unsigned long count;

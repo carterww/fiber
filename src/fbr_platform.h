@@ -1,0 +1,43 @@
+/* See LICENSE file for copyright and license details. */
+
+#ifndef _FBR_PLATFORM_H
+#define _FBR_PLATFORM_H
+
+#define FBR_CACHELINE_BYTES (64)
+
+/* Figure out the architecture */
+#if defined(__x86_64__) || defined(__am64__)
+#define FBR_ARCH_X86_64
+#elif defined(__arm__)
+#define FBR_ARCH_ARM
+#if defined(__thumb__)
+#define FBR_ARCH_ARM_THUMB
+#else
+#define FBR_ARCH_ARM_NO_THUMB
+#endif /* __thumb__ */
+#elif defined(__aarch64__)
+#define FBR_ARCH_ARM64
+#elif defined(__i386__)
+#define FBR_ARCH_X86
+#elif defined(__risv) && (__risv_xlen == 64)
+#define FBR_ARCH_RISCV_64
+#else
+#error Detected an unsupported architecture.
+#endif /* arch */
+
+#if defined(FBR_ARCH_X86_64) || defined(FBR_ARCH_ARM64) || defined(FBR_ARCH_RISCV64)
+#define FBR_ARCH_64_BIT
+#elif defined(FBR_ARCH_ARM) || defined(FBR_ARCH_X86)
+#define FBR_ARCH_32_BIT
+#endif
+
+/* Figure out the OS */
+#if defined(__linux__)
+#define FBR_OS_LINUX
+#elif defined(__FreeBSD__)
+#define FBR_OS_BSD_FREE
+#else
+#error Detected an unsupported operating system.
+#endif /* os */
+
+#endif /* _FBR_PLATFORM_H */
