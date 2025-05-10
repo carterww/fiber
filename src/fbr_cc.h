@@ -25,16 +25,16 @@
 #define fbr_assume_aligned(p, a) __builtin_assume_aligned(p, a)
 #define fbr_prefetch(p) __builtin_prefetch(p)
 
-#define fbr_attr_aligned(a) __attribute__((aligned(a)))
-#define fbr_attr_alloc_aligned(arg_p) __attribute__((alloc_align(arg_p)))
-#define fbr_attr_noreturn __attribute__((noreturn))
-#define fbr_attr_always_inline __attribute__((always_inline))
-#define fbr_attr_cold __attribute__((cold))
-#define fbr_attr_hot __attribute__((hot))
-#define fbr_attr_const __attribute__((const))
-#define fbr_attr_weak __attribute__((weak))
-#define fbr_attr_public __attribute__((visibility("default")))
-#define fbr_attr_private __attribute__((visibility("hidden")))
+#define FBR_ATTR_ALIGNED(a) __attribute__((aligned(a)))
+#define FBR_ATTR_ALLOC_ALIGNED(arg_p) __attribute__((alloc_align(arg_p)))
+#define FBR_ATTR_NORETURN __attribute__((noreturn))
+#define FBR_ATTR_ALWAYS_INLINE __attribute__((always_inline))
+#define FBR_ATTR_COLD __attribute__((cold))
+#define FBR_ATTR_HOT __attribute__((hot))
+#define FBR_ATTR_CONST __attribute__((const))
+#define FBR_ATTR_WEAK __attribute__((weak))
+#define FBR_ATTR_PUBLIC __attribute__((visibility("default")))
+#define FBR_ATTR_PRIVATE __attribute__((visibility("hidden")))
 
 #endif /* gcc or clang */
 

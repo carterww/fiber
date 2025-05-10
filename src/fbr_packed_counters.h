@@ -34,7 +34,7 @@ fbr_packed_counters_load(const union fbr_packed_counters_union *packed)
 
 #define FIBER_PACKED_COUNTERS_OP(lo_op_name, LO_OP, hi_op_name, HI_OP)   \
 	inline static void                                               \
-		fiber_packed_counters_lo##lo_op_name##_hi##hi_op_name(   \
+		fbr_packed_counters_##lo_op_name##lo_##hi_op_name##hi(   \
 			union fbr_packed_counters_union *packed,         \
 			uint32_t delta_lo, uint32_t delta_hi)            \
 	{                                                                \
@@ -55,19 +55,19 @@ FIBER_PACKED_COUNTERS_OP(sub, -=, add, +=)
 FIBER_PACKED_COUNTERS_OP(sub, -=, sub, -=)
 #undef FIBER_PACKED_COUNTERS_OP
 
-#define FIBER_PACKED_COUNTERS_SINGLE_OP(op_name, OP, counter_name)           \
-	inline static void fiber_packed_counters_##counter_name##_##op_name( \
-		union fbr_packed_counters_union *packed,                     \
-		uint32_t delta_##counter_name)                               \
-	{                                                                    \
-		union fbr_packed_counters_union set;                         \
-		uint64_t old;                                                \
-		old = ck_pr_load_64(&packed->raw);                           \
-		do {                                                         \
-			set.raw = old;                                       \
-			set.parts.counter_name OP delta_##counter_name;      \
-		} while (!ck_pr_cas_64_value(&packed->raw, old, set.raw,     \
-					     &old));                         \
+#define FIBER_PACKED_COUNTERS_SINGLE_OP(op_name, OP, counter_name)       \
+	inline static void fbr_packed_counters_##op_name##counter_name(  \
+		union fbr_packed_counters_union *packed,                 \
+		uint32_t delta_##counter_name)                           \
+	{                                                                \
+		union fbr_packed_counters_union set;                     \
+		uint64_t old;                                            \
+		old = ck_pr_load_64(&packed->raw);                       \
+		do {                                                     \
+			set.raw = old;                                   \
+			set.parts.counter_name OP delta_##counter_name;  \
+		} while (!ck_pr_cas_64_value(&packed->raw, old, set.raw, \
+					     &old));                     \
 	}
 
 FIBER_PACKED_COUNTERS_SINGLE_OP(add, +=, lo)

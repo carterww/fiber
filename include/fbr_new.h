@@ -34,8 +34,8 @@ struct fbr_queue_init_result {
 };
 
 struct fbr_queue_ops {
-	unsigned int (*push)(void *, const struct fbr_job *, uint32_t);
-	unsigned int (*pop)(void *, struct fbr_job *, uint32_t);
+	unsigned int (*push)(void *, const struct fbr_job *);
+	unsigned int (*pop)(void *, struct fbr_job *);
 	struct fbr_queue_init_result (*init)(unsigned int,
 					     struct fbr_allocator);
 	void (*free)(void *);
@@ -62,10 +62,9 @@ fbr_init_result_t fbr_init(const fbr_init_options_t *options);
 
 void fiber_free(fbr_pool_t *pool);
 
-fbr_errno_t fbr_job_push(fbr_pool_t *pool, fbr_job_t *job, uint32_t flags);
+fbr_errno_t fbr_job_push(fbr_pool_t *pool, fbr_job_t *job);
 
-fbr_errno_t fbr_job_push_raw(fbr_pool_t *pool, const fbr_job_t *job,
-			     uint32_t flags);
+fbr_errno_t fbr_job_push_raw(fbr_pool_t *pool, const fbr_job_t *job);
 
 fbr_errno_t fbr_wait(fbr_pool_t *pool);
 

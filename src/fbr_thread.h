@@ -3,6 +3,9 @@
 #ifndef _FBR_THREAD_H
 #define _FBR_THREAD_H
 
+#include <ck_pr.h>
+#include <stdbool.h>
+
 #include <fbr_errno.h>
 
 #if defined(FIBER_BUILD_OPT_THREAD_IMPL_POSIX)
@@ -126,6 +129,16 @@ fbr_errno_t fbr_thread_cancel(const tid_t *thread_id);
 
 #define FBR_THREAD_CANCEL_DEFERRED (PTHREAD_CANCEL_DEFERRED)
 #define FBR_THREAD_CANCEL_ASYNCHRONOUS (PTHREAD_CANCEL_ASYNCHRONOUS)
+
+inline static tid_t fbr_thread_self(void)
+{
+	return pthread_self();
+}
+
+inline static bool fbr_thread_tid_equal(const tid_t *t1, const tid_t *t2)
+{
+	return pthread_equal(*t1, *t2) ? true : false;
+}
 
 #endif /* FIBER_THREADING_LIB_PTHREAD */
 
