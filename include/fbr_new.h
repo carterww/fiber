@@ -34,9 +34,9 @@ struct fbr_queue_init_result {
 };
 
 struct fbr_queue_ops {
-	unsigned int (*push)(void *, const struct fbr_job *);
-	unsigned int (*pop)(void *, struct fbr_job *);
-	struct fbr_queue_init_result (*init)(unsigned int,
+	uint32_t (*push)(void *, const struct fbr_job *);
+	uint32_t (*pop)(void *, struct fbr_job *);
+	struct fbr_queue_init_result (*init)(uint32_t,
 					     struct fbr_allocator);
 	void (*free)(void *);
 };
@@ -45,10 +45,10 @@ typedef struct fbr_queue_ops fbr_queue_ops_t;
 struct fbr_init_options {
 	struct fbr_queue_ops queue_ops;
 	struct fbr_allocator allocator;
-	unsigned int thread_num;
-	unsigned int queue_len;
-	unsigned int thread_max;
-	unsigned int callers_max;
+	uint32_t thread_num;
+	uint32_t queue_len;
+	uint32_t thread_max;
+	uint32_t callers_max;
 };
 typedef struct fbr_init_options fbr_init_options_t;
 
@@ -62,22 +62,26 @@ fbr_init_result_t fbr_init(const fbr_init_options_t *options);
 
 void fiber_free(fbr_pool_t *pool);
 
-fbr_errno_t fbr_job_push(fbr_pool_t *pool, fbr_job_t *job);
-
-fbr_errno_t fbr_job_push_raw(fbr_pool_t *pool, const fbr_job_t *job);
+fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job);
 
 fbr_errno_t fbr_wait(fbr_pool_t *pool);
 
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
-fbr_errno_t fbr_thread_add(fbr_pool_t *pool, unsigned int thread_num);
+fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool);
 
-fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, unsigned int thread_num);
+fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t thread_num);
 
-unsigned int fbr_thread_num(const fbr_pool_t *pool);
+fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t thread_num);
 
-unsigned int fbr_thread_working(const fbr_pool_t *pool);
+uint32_t fbr_thread_num(const fbr_pool_t *pool);
 
-unsigned int fbr_jobs_pending(const fbr_pool_t *pool);
+uint32_t fbr_thread_working(const fbr_pool_t *pool);
+
+uint32_t fbr_jobs_pending(const fbr_pool_t *pool);
+
+uint32_t fbr_thread_max(const fbr_pool_t *pool);
+
+uint32_t fbr_callers_max(const fbr_pool_t *pool);
 
 #endif /* FBR_H */

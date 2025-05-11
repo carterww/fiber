@@ -1,6 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "fbr_packed_counters.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -11,12 +10,13 @@
 
 #include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
+#include "fbr_futex.h"
 #include "fbr_internal.h"
 #include "fbr_thread.h"
 #include "fbr_worker.h"
 
-static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, unsigned int num,
-				     unsigned int *real_num);
+static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
+				     uint32_t *real_num);
 
 static void fbr_worker_cancel(struct fbr_pool *pool, unsigned int num);
 
@@ -28,7 +28,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	struct fbr_thread *threads = NULL;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
-	unsigned int worker_num = 0;
+	uint32_t worker_num = 0;
 
 	/* Validate options */
 	if (opt == NULL) {
@@ -37,7 +37,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	}
 	if (opt->queue_ops.push == NULL || opt->queue_ops.pop == NULL ||
 	    opt->queue_ops.init == NULL || opt->queue_ops.free == NULL) {
-		res.error = FBR_ENO_QUEUE_OPS;
+		res.error = FBR_ENULL_ARG;
 		return res;
 	}
 	if (opt->allocator.malloc == NULL || opt->allocator.free == NULL) {
@@ -56,14 +56,13 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	}
 	pool_m->job_queue = NULL;
 	pool_m->job_queue_ops = opt->queue_ops;
-	pool_m->job_id_counter = 1;
 	pool_m->active = 1;
 	pool_m->thread_num = 0;
-	pool_m->twlo_qlhi.parts.lo = 0;
-	pool_m->twlo_qlhi.parts.hi = 0;
+	pool_m->tw_ql.thread_working = 0;
+	pool_m->tw_ql.queue_length = 0;
 	pool_m->thread_kill_num = 0;
 	pool_m->thread_max = opt->thread_max;
-	pool_m->caller_max = opt->callers_max;
+	pool_m->callers_max = opt->callers_max;
 	pool_m->alloc = opt->allocator;
 
 	/* Initialization after this point must goto init_error in order to cleanup
@@ -157,9 +156,31 @@ void fiber_free(fbr_pool_t *pool)
 	fbr_free_sync(pool);
 }
 
-fbr_errno_t fbr_job_push(fbr_pool_t *pool, fbr_job_t *job);
+fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
+{
+	uint32_t push_num;
+	uint32_t jq_len;
+	fbr_errno_t wake_err;
 
-fbr_errno_t fbr_job_push_raw(fbr_pool_t *pool, const fbr_job_t *job);
+	if (pool == NULL || job == NULL || job->cb == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+	fbr_assert(pool->job_queue != NULL);
+	fbr_assert(pool->job_queue_ops.push != NULL);
+	push_num = pool->job_queue_ops.push(pool->job_queue, job);
+	if (push_num == 0) {
+		return FBR_EQUEUE_PUSH;
+	}
+	jq_len = ck_pr_faa_32(&pool->tw_ql.queue_length, push_num) + push_num;
+	ck_pr_barrier();
+	wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &jq_len);
+	fbr_assert(wake_err == FBR_EOK);
+
+	return FBR_EOK;
+}
 
 fbr_errno_t fbr_wait(fbr_pool_t *pool);
 
@@ -169,29 +190,23 @@ fbr_errno_t fbr_thread_add(fbr_pool_t *pool, unsigned int thread_num);
 
 fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, unsigned int thread_num);
 
-unsigned int fbr_thread_working(const fbr_pool_t *pool)
+uint32_t fbr_thread_working(const fbr_pool_t *pool)
 {
-	struct fbr_packed_counters counters;
-
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	counters = fbr_packed_counters_load(&pool->twlo_qlhi);
-	return counters.lo;
+	return ck_pr_load_32(&pool->tw_ql.thread_working);
 }
 
-unsigned int fbr_jobs_pending(const fbr_pool_t *pool)
+uint32_t fbr_jobs_pending(const fbr_pool_t *pool)
 {
-	struct fbr_packed_counters counters;
-
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	counters = fbr_packed_counters_load(&pool->twlo_qlhi);
-	return counters.hi;
+	return ck_pr_load_32(&pool->tw_ql.queue_length);
 }
 
-unsigned int fbr_thread_num(const fbr_pool_t *pool)
+uint32_t fbr_thread_num(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
@@ -199,7 +214,7 @@ unsigned int fbr_thread_num(const fbr_pool_t *pool)
 	return ck_pr_load_uint(&pool->thread_num);
 }
 
-unsigned int fbr_thread_max(const fbr_pool_t *pool)
+uint32_t fbr_thread_max(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
@@ -207,7 +222,7 @@ unsigned int fbr_thread_max(const fbr_pool_t *pool)
 	return ck_pr_load_uint(&pool->thread_max);
 }
 
-unsigned int fbr_callers_max(const fbr_pool_t *pool)
+uint32_t fbr_callers_max(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
@@ -215,8 +230,8 @@ unsigned int fbr_callers_max(const fbr_pool_t *pool)
 	return ck_pr_load_uint(&pool->callers_max);
 }
 
-static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, unsigned int num,
-				     unsigned int *real_num)
+static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
+				     uint32_t *real_num)
 {
 	*real_num = 0;
 	for (; *real_num < num; *real_num += 1) {
@@ -244,7 +259,7 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, unsigned int num,
 		/* Canceled must be visible before the type */
 		ck_pr_store_int(&thread_entry->thread.internal.canceled, 0);
 		ck_pr_fence_store();
-		ck_pr_store_int(&thread_entry->type, FBR_THREAD_TYPE_INTERNAL);
+		ck_pr_store_int((int *)&thread_entry->type, (int)FBR_THREAD_TYPE_INTERNAL);
 		err = fbr_thread_create(&thread_entry->thread.internal.id,
 					fbr_worker_runner_internal,
 					(void *)pool);
@@ -259,8 +274,8 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, unsigned int num,
 
 static void fbr_worker_cancel(struct fbr_pool *pool, unsigned int num)
 {
-	unsigned int count = 0;
-	unsigned int idx;
+	uint32_t count = 0;
+	uint32_t idx;
 	struct fbr_bm_alloc_iterator iter;
 
 	fbr_bm_iterator_init(&pool->threads.meta, &iter);
@@ -268,13 +283,15 @@ static void fbr_worker_cancel(struct fbr_pool *pool, unsigned int num)
 	       fbr_bm_iterator_next(&pool->threads.meta, &iter, &idx)) {
 		struct fbr_thread *thread_arr;
 		struct fbr_thread *thread_entry;
+		int type_int;
 		enum fbr_thread_type type;
 		fbr_errno_t err;
 
 		thread_arr = ck_pr_load_ptr(&pool->threads.array);
 		thread_entry = &thread_arr[idx];
 
-		type = ck_pr_load_int(&thread_entry->type);
+		type_int = ck_pr_load_int((int *)&thread_entry->type);
+		type = (enum fbr_thread_type)type_int;
 		if (type != FBR_THREAD_TYPE_INTERNAL) {
 			continue;
 		}

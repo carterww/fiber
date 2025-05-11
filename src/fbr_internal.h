@@ -3,12 +3,12 @@
 #ifndef _FBR_INTERNAL_H
 #define _FBR_INTERNAL_H
 
-#include "fbr_packed_counters.h"
 #include <limits.h>
 
 #include <fbr_new.h>
 
 #include "fbr_bm_alloc.h"
+#include "fbr_cc.h"
 #include "fbr_thread.h"
 
 enum fbr_thread_type {
@@ -39,6 +39,11 @@ struct fbr_thread_entries {
 	struct fbr_thread *array;
 };
 
+struct fbr_tw_ql_packed {
+	uint32_t thread_working;
+	uint32_t queue_length;
+} FBR_ATTR_ALIGNED(8) FBR_ATTR_PACKED;
+
 struct fbr_pool {
 	void *job_queue;
 	struct fbr_queue_ops job_queue_ops;
@@ -46,14 +51,14 @@ struct fbr_pool {
 	int active;
 
 	unsigned int thread_num;
-	union fbr_packed_counters_union twlo_qlhi;
+	struct fbr_tw_ql_packed tw_ql;
 
-	int thread_kill_num;
+	int32_t thread_kill_num;
 
 	struct fbr_thread_entries threads;
 
-	const unsigned int thread_max; /* Max number of threads in pool */
-	const unsigned int callers_max; /* Max number of callers */
+	const uint32_t thread_max;
+	const uint32_t callers_max;
 
 	struct fbr_allocator alloc;
 };
@@ -62,18 +67,17 @@ struct fbr_pool {
 struct fbr_pool_mutable {
 	void *job_queue;
 	struct fbr_queue_ops job_queue_ops;
-	uint64_t job_id_counter;
 	int active;
 
 	unsigned int thread_num;
-	union fbr_packed_counters_union twlo_qlhi;
+	struct fbr_tw_ql_packed tw_ql;
 
-	int thread_kill_num;
+	int32_t thread_kill_num;
 
 	struct fbr_thread_entries threads;
 
-	unsigned int thread_max;
-	unsigned int callers_max;
+	uint32_t thread_max;
+	uint32_t callers_max;
 
 	struct fbr_allocator alloc;
 };

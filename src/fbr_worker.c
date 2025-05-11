@@ -1,3 +1,4 @@
+#include "fbr_cc.h"
 #include <limits.h>
 
 #include <ck_pr.h>
@@ -7,12 +8,20 @@
 
 #include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
+#include "fbr_futex.h"
 #include "fbr_internal.h"
-#include "fbr_packed_counters.h"
 #include "fbr_thread.h"
 #include "fbr_worker.h"
 
+enum fbr_trysleep_queue_wakeup_reason {
+	FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE = 0,
+	FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME,
+};
+
 static void fbr_worker_cleanup(void *tls_ptr);
+
+static enum fbr_trysleep_queue_wakeup_reason
+fbr_worker_trysleep_on_queue(struct fbr_pool *pool);
 
 static bool fbr_worker_thread_entry_index_get(const struct fbr_pool *pool,
 					      const tid_t *tid,
@@ -21,8 +30,11 @@ static bool fbr_worker_thread_entry_index_get(const struct fbr_pool *pool,
 	const unsigned int entries_num = FBR_BM_ALLOC_CAP(&pool->threads.meta);
 	struct fbr_thread *entries = ck_pr_load_ptr(&pool->threads.array);
 	for (unsigned int i = 0; i < entries_num; ++i) {
+		int type_int;
+		enum fbr_thread_type type;
 		struct fbr_thread *entry = &entries[i];
-		enum fbr_thread_type type = ck_pr_load_int(&entry->type);
+		type_int = ck_pr_load_int((int *)&entry->type);
+		type = (enum fbr_thread_type)type_int;
 		if (type == FBR_THREAD_TYPE_INTERNAL &&
 		    fbr_thread_tid_equal(tid, &entry->thread.internal.id)) {
 			*idx = i;
@@ -74,9 +86,13 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 
 	tls = pool->alloc.malloc(sizeof(*tls));
 	if (tls == NULL) {
-		canceled_old = ck_pr_fas_int(&entry->thread.internal.canceled, 1);
+		canceled_old =
+			ck_pr_fas_int(&entry->thread.internal.canceled, 1);
 		struct fbr_worker_tls tls_stack = {
-			pool, thread_id, thread_idx, true,
+			pool,
+			thread_id,
+			thread_idx,
+			true,
 		};
 		fbr_worker_cleanup(&tls_stack);
 		/* Someone tried to cancel this thread but canceling was disabled.
@@ -117,47 +133,64 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 void fbr_worker_runner_loop(struct fbr_pool *pool)
 {
 	struct fbr_job buff;
-	unsigned int pop_num;
+	uint32_t pop_num;
 
 loop:
 	while (true) {
 		pop_num = pool->job_queue_ops.pop(pool->job_queue, &buff);
 		if (pop_num == 0) {
-			/* TODO: Sleep until we think job is available */
-			continue;
+			switch (fbr_worker_trysleep_on_queue(pool)) {
+			case FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE:
+				goto loop;
+			case FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME:
+				goto handle_exit;
+			default:
+				fbr_unreachable();
+			}
 		}
 		fbr_assert(buff.cb != NULL);
-		fbr_packed_counters_addlo_subhi(&pool->twlo_qlhi, 1, pop_num);
+		ck_pr_sub_32(&pool->tw_ql.queue_length, pop_num);
+		ck_pr_fence_atomic();
+		ck_pr_inc_32(&pool->tw_ql.thread_working);
+
 		/* Keep popping jobs without altering thread working count */
 		while (true) {
 			(void)buff.cb(buff.cb_arg);
 			if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
 				goto handle_exit;
 			}
-			pop_num = pool->job_queue_ops.pop(pool->job_queue, &buff);
+			pop_num =
+				pool->job_queue_ops.pop(pool->job_queue, &buff);
 			if (pop_num == 0) {
 				/* Go back to top to outer loop to sleep */
 				break;
 			}
-			fbr_packed_counters_subhi(&pool->twlo_qlhi, pop_num);
+			ck_pr_sub_32(&pool->tw_ql.queue_length, pop_num);
 		}
-		fbr_packed_counters_sublo(&pool->twlo_qlhi, 1);
+		ck_pr_dec_32(&pool->tw_ql.thread_working);
+		ck_pr_fence_atomic_load();
 		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
 			goto handle_exit;
 		}
 	}
 handle_exit: {
-	int to_kill = ck_pr_faa_int(&pool->thread_kill_num, -1) - 1;
+	int32_t to_kill = (int32_t)ck_pr_faa_32(
+		(uint32_t *)&pool->thread_kill_num, (uint32_t)-1);
+	to_kill -= 1;
 	if (to_kill < 0) {
 		/* Value negative. Add back to fix count and continue exeuction */
-		ck_pr_faa_int(&pool->thread_kill_num, 1);
+		ck_pr_inc_32((uint32_t *)&pool->thread_kill_num);
 		goto loop;
 	} else {
 		if (to_kill > 0) {
+			fbr_errno_t wake_err;
+			uint32_t uto_kill = (uint32_t)to_kill;
 			/* All other threads could be sleeping on the queue so we need to wake
-			 * one up.
-			 * TODO: Implement that.
+			 * at least one up. We'll just wake at most to_kill up.
 			 */
+			wake_err = fbr_futex_wake(&pool->tw_ql.queue_length,
+						  &uto_kill);
+			fbr_assert(wake_err == FBR_EOK);
 		}
 		return;
 	}
@@ -191,8 +224,34 @@ static void fbr_worker_cleanup(void *tls_ptr)
 		fbr_free_sync(pool);
 	}
 	pool = NULL;
-	
+
 	if (!tls->on_stack) {
 		pool->alloc.free(tls);
 	}
+}
+
+static enum fbr_trysleep_queue_wakeup_reason
+fbr_worker_trysleep_on_queue(struct fbr_pool *pool)
+{
+	uint32_t queue_len;
+	fbr_errno_t err;
+	while (true) {
+		err = fbr_futex_wait(&pool->tw_ql.queue_length, 0);
+		fbr_assert(err == FBR_EOK || err == FBR_EAGAIN);
+		/* Queue is not empty, don't sleep */
+		if (err == FBR_EAGAIN) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE;
+		}
+		/* Either someone woke us up or it's a spurious wake up. */
+		/* Check if we need to handle any important flags */
+		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME;
+		}
+		/* Check the queue length condition */
+		queue_len = ck_pr_load_32(&pool->tw_ql.queue_length);
+		if (queue_len != 0) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE;
+		}
+	}
+	fbr_unreachable();
 }

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED True)
-project(fiber VERSION 0.2.1)
+project(fiber VERSION 0.2.2)
 
 # Pthreads required
 find_package(Threads REQUIRED)
@@ -12,6 +12,16 @@ get_filename_component(CK_LIB_DIR ${CK_LIBRARY} DIRECTORY)
 get_filename_component(CK_ROOT ${CK_LIB_DIR} DIRECTORY)
 set(CK_INCLUDE_DIR "${CK_ROOT}/include")
 
+set(LIB_TARGET ${PROJECT_NAME})
+set(FUTEX_TARGET fiber_futex)
+
+set(COMMON_COMPILE_DEFS "")
+set(COMMON_INTERNAL_INCLUDES
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CK_INCLUDE_DIR}
+)
+
 function(create_build_bool_option opt_name desc default)
     option(${opt_name} ${desc} ${default})
     if(${opt_name})
@@ -19,9 +29,8 @@ function(create_build_bool_option opt_name desc default)
     else()
         set(${opt_name}_ENABLED 0)
     endif()
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
-        FIBER_BUILD_OPT_${opt_name}=${${opt_name}_ENABLED}
-    )
+    set(def FIBER_BUILD_OPT_${opt_name}=${${opt_name}_ENABLED})
+    set(COMMON_COMPILE_DEFS "${COMMON_COMPILE_DEFS};${def}" PARENT_SCOPE)
 endfunction()
 
 function(create_build_enum_option opt_name desc default)
@@ -30,23 +39,9 @@ function(create_build_enum_option opt_name desc default)
         message(FATAL_ERROR "${opt_name} is invalid: ${${opt_name}}. Select one of ${ARGN}")
     endif()
     string(TOUPPER ${${opt_name}} ${opt_name}_UPPER)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE
-        FIBER_BUILD_OPT_${opt_name}_${${opt_name}_UPPER}
-    )
+    set(def FIBER_BUILD_OPT_${opt_name}_${${opt_name}_UPPER})
+    set(COMMON_COMPILE_DEFS "${COMMON_COMPILE_DEFS};${def}" PARENT_SCOPE)
 endfunction()
-
-set(SOURCE_FILES
-    src/capability.c
-    src/fiber.c
-    src/mutex.c
-    src/sem.c
-    src/thread_list.c
-    src/threading_pthread.c
-    src/version.c
-    src/wait.c
-    src/worker.c
-    src/queue/fifo.c
-)
 
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 	set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Choose the type of build." FORCE)
@@ -161,9 +156,6 @@ add_link_options(${LINKER_SECURITY_FLAGS})
 # Set properties
 set_property(GLOBAL PROPERTY POSITION_INDEPENDENT_CODE ${PIC})
 
-add_library(${PROJECT_NAME} STATIC ${SOURCE_FILES})
-target_link_libraries(${PROJECT_NAME} ${CK_LIBRARY})
-
 # Boolean options
 create_build_bool_option(COMPILE_ASSERTS
     "Compile fiber_assert and panic statements into the library"
@@ -199,21 +191,52 @@ create_build_enum_option(SEMAPHORE_IMPL
     posix
     posix
 )
+create_build_enum_option(FUTEX_IMPL
+    "Which futex implementation to use"
+    linux
+    linux
+)
+set(LIB_SOURCE_FILES
+    src/fbr_api.c
+    src/fbr_worker.c
+)
 
-target_compile_definitions(${PROJECT_NAME} PUBLIC
+if (FUTEX_IMPL STREQUAL "linux")
+    set(FUTEX_SOURCE_FILES src/linux/fbr_linux_futex.c)
+endif()
+add_library(${LIB_TARGET} STATIC ${LIB_SOURCE_FILES})
+add_library(${FUTEX_TARGET} STATIC ${FUTEX_SOURCE_FILES})
+
+target_link_libraries(${LIB_TARGET} ${CK_LIBRARY})
+target_link_libraries(${LIB_TARGET} ${FUTEX_TARGET})
+
+target_include_directories(${LIB_TARGET} PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_compile_definitions(${LIB_TARGET} PUBLIC
     FIBER_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
     FIBER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     FIBER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
-
-target_include_directories(${PROJECT_NAME} PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+target_compile_definitions(${FUTEX_TARGET} PUBLIC
+    FIBER_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
+    FIBER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
+    FIBER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
-target_include_directories(${PROJECT_NAME} PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/internal
-    ${CK_INCLUDE_DIR}
+target_compile_definitions(${LIB_TARGET} PRIVATE
+    ${COMMON_COMPILE_DEFS}
+)
+target_compile_definitions(${FUTEX_TARGET} PRIVATE
+    ${COMMON_COMPILE_DEFS}
 )
 
-add_executable(example src/example.c)
-target_link_libraries(example ${PROJECT_NAME})
+target_include_directories(${LIB_TARGET} PRIVATE
+    ${COMMON_INTERNAL_INCLUDES}
+)
+target_include_directories(${FUTEX_TARGET} PRIVATE
+    ${COMMON_INTERNAL_INCLUDES}
+)
+
+add_executable(example example.c)
+target_link_libraries(example ${LIB_TARGET})

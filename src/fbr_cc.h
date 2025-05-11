@@ -21,13 +21,14 @@
 #define fbr_expect(expr, expect) __builtin_expect(expr, expect)
 
 #define fbr_compiler_barrier() __asm__ __volatile__("" ::: "memory");
-#define fbr_unreachable() __builtin_unreachable
+#define fbr_unreachable() __builtin_unreachable()
 #define fbr_assume_aligned(p, a) __builtin_assume_aligned(p, a)
 #define fbr_prefetch(p) __builtin_prefetch(p)
 
 #define FBR_ATTR_ALIGNED(a) __attribute__((aligned(a)))
 #define FBR_ATTR_ALLOC_ALIGNED(arg_p) __attribute__((alloc_align(arg_p)))
 #define FBR_ATTR_NORETURN __attribute__((noreturn))
+#define FBR_ATTR_PACKED __attribute__((packed))
 #define FBR_ATTR_ALWAYS_INLINE __attribute__((always_inline))
 #define FBR_ATTR_COLD __attribute__((cold))
 #define FBR_ATTR_HOT __attribute__((hot))
