@@ -1,4 +1,6 @@
-#include "ck_pr.h"
+#include <limits.h>
+
+#include <ck_pr.h>
 
 #include <fbr_errno.h>
 #include <fbr_new.h>
@@ -9,6 +11,8 @@
 #include "fbr_packed_counters.h"
 #include "fbr_thread.h"
 #include "fbr_worker.h"
+
+static void fbr_worker_cleanup(void *tls_ptr);
 
 static bool fbr_worker_thread_entry_index_get(const struct fbr_pool *pool,
 					      const tid_t *tid,
@@ -41,8 +45,6 @@ fbr_worker_thread_entry_get(const struct fbr_pool *pool, const tid_t *tid)
 	}
 }
 
-static void fbr_worker_cleanup(void *tls_ptr);
-
 void *fbr_worker_runner_internal(void *pool_ptr)
 {
 	struct fbr_pool *pool;
@@ -73,9 +75,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	tls = pool->alloc.malloc(sizeof(*tls));
 	if (tls == NULL) {
 		canceled_old = ck_pr_fas_int(&entry->thread.internal.canceled, 1);
-		if (canceled_old == 0) {
-			fbr_thread_detach(&thread_id);
-		}
 		struct fbr_worker_tls tls_stack = {
 			pool, thread_id, thread_idx, true,
 		};
@@ -109,7 +108,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	 */
 	if (canceled_old == 0) {
 		fbr_thread_cancel_disable();
-		fbr_thread_detach(&thread_id);
 	}
 	fbr_thread_cleanup_pop(1);
 	fbr_thread_exit(NULL);
@@ -166,16 +164,33 @@ handle_exit: {
 }
 }
 
-static void fbr_worker_cleanup_internal(void *tls_ptr)
+static void fbr_worker_cleanup(void *tls_ptr)
 {
 	struct fbr_worker_tls *tls = (struct fbr_worker_tls *)tls_ptr;
+	bool last_alive;
+	int active;
+
 	fbr_assert(tls != NULL);
 	struct fbr_pool *pool = tls->pool;
 	fbr_assert(pool != NULL);
 
 	fbr_bm_free(&pool->threads.meta, tls->thread_idx);
 	ck_pr_fence_atomic();
-	ck_pr_sub_uint(&pool->thread_num, 1);
+	last_alive = ck_pr_dec_uint_is_zero(&pool->thread_num);
+	ck_pr_fence_atomic_load();
+	active = ck_pr_load_int(&pool->active);
+
+	/* Pool is possibly going to be freed. */
+	tls->pool = NULL;
+	tls->thread_idx = UINT_MAX;
+
+	/* This thread is responsible for cleaning up the pool because it is
+	 * last in inactive pool.
+	 */
+	if (!active && last_alive) {
+		fbr_free_sync(pool);
+	}
+	pool = NULL;
 	
 	if (!tls->on_stack) {
 		pool->alloc.free(tls);
