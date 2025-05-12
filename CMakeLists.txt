@@ -13,7 +13,9 @@ get_filename_component(CK_ROOT ${CK_LIB_DIR} DIRECTORY)
 set(CK_INCLUDE_DIR "${CK_ROOT}/include")
 
 set(LIB_TARGET ${PROJECT_NAME})
+set(THREAD_TARGET fiber_thread)
 set(FUTEX_TARGET fiber_futex)
+set(JQ_RING_TARGET fiber_jq_ring)
 
 set(COMMON_COMPILE_DEFS "")
 set(COMMON_INTERNAL_INCLUDES
@@ -201,14 +203,21 @@ set(LIB_SOURCE_FILES
     src/fbr_worker.c
 )
 
+if (THREAD_IMPL STREQUAL "posix")
+	set(THREAD_SOURCE_FILES src/posix/fbr_posix_thread.c)
+endif()
 if (FUTEX_IMPL STREQUAL "linux")
-    set(FUTEX_SOURCE_FILES src/linux/fbr_linux_futex.c)
+	set(FUTEX_SOURCE_FILES src/linux/fbr_linux_futex.c)
 endif()
 add_library(${LIB_TARGET} STATIC ${LIB_SOURCE_FILES})
+add_library(${THREAD_TARGET} STATIC ${THREAD_SOURCE_FILES})
 add_library(${FUTEX_TARGET} STATIC ${FUTEX_SOURCE_FILES})
+add_library(${JQ_RING_TARGET} STATIC src/fbr_jq_ring.c)
 
 target_link_libraries(${LIB_TARGET} ${CK_LIBRARY})
+target_link_libraries(${LIB_TARGET} ${THREAD_TARGET})
 target_link_libraries(${LIB_TARGET} ${FUTEX_TARGET})
+target_link_libraries(${LIB_TARGET} ${JQ_RING_TARGET})
 
 target_include_directories(${LIB_TARGET} PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -219,22 +228,29 @@ target_compile_definitions(${LIB_TARGET} PUBLIC
     FIBER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
     FIBER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
 )
-target_compile_definitions(${FUTEX_TARGET} PUBLIC
-    FIBER_VERSION_MAJOR=${PROJECT_VERSION_MAJOR}
-    FIBER_VERSION_MINOR=${PROJECT_VERSION_MINOR}
-    FIBER_VERSION_PATCH=${PROJECT_VERSION_PATCH}
-)
 target_compile_definitions(${LIB_TARGET} PRIVATE
     ${COMMON_COMPILE_DEFS}
 )
+target_compile_definitions(${THREAD_TARGET} PRIVATE
+    ${COMMON_COMPILE_DEFS}
+)
 target_compile_definitions(${FUTEX_TARGET} PRIVATE
+    ${COMMON_COMPILE_DEFS}
+)
+target_compile_definitions(${JQ_RING_TARGET} PRIVATE
     ${COMMON_COMPILE_DEFS}
 )
 
 target_include_directories(${LIB_TARGET} PRIVATE
     ${COMMON_INTERNAL_INCLUDES}
 )
+target_include_directories(${THREAD_TARGET} PRIVATE
+    ${COMMON_INTERNAL_INCLUDES}
+)
 target_include_directories(${FUTEX_TARGET} PRIVATE
+    ${COMMON_INTERNAL_INCLUDES}
+)
+target_include_directories(${JQ_RING_TARGET} PRIVATE
     ${COMMON_INTERNAL_INCLUDES}
 )
 

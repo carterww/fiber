@@ -5,7 +5,7 @@
 
 #include <limits.h>
 
-#include <fbr_new.h>
+#include <fbr.h>
 
 #include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
@@ -47,7 +47,6 @@ struct fbr_tw_ql_packed {
 struct fbr_pool {
 	void *job_queue;
 	struct fbr_queue_ops job_queue_ops;
-	uint64_t job_id_counter;
 	int active;
 
 	unsigned int thread_num;

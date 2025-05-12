@@ -42,7 +42,7 @@ inline static void *fbr_bm_alloc_init(struct fbr_bm_alloc_meta *meta,
 	 * alignment of the entries pointer and may help with false sharing.
 	 */
 	bm_size = (bm_size + FBR_CACHELINE_BYTES - 1) &
-		  ~(size_t)(FBR_CACHELINE_BYTES - 1);
+		  (~(size_t)(FBR_CACHELINE_BYTES - 1));
 
 	ptr = malloc(bm_size + entries_size);
 	if (ptr == NULL) {

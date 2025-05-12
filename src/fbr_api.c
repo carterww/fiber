@@ -5,8 +5,8 @@
 
 #include <ck_pr.h>
 
+#include <fbr.h>
 #include <fbr_errno.h>
-#include <fbr_new.h>
 
 #include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
@@ -77,6 +77,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		res.error = FBR_ENOMEM;
 		goto init_error;
 	}
+	pool_m->threads.array = threads;
 	for (unsigned int i = 0; i < opt->thread_max; ++i) {
 		struct fbr_thread *t;
 		t = &pool_m->threads.array[i];
@@ -89,6 +90,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		res.error = queue_res.error;
 		goto init_error;
 	}
+	pool_m->job_queue = queue_res.queue;
 
 	/* DON'T USE pool_m ANYMORE !UB!UB! */
 	pool = (struct fbr_pool *)pool_m;
@@ -176,8 +178,10 @@ fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
 	}
 	jq_len = ck_pr_faa_32(&pool->tw_ql.queue_length, push_num) + push_num;
 	ck_pr_barrier();
-	wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &jq_len);
-	fbr_assert(wake_err == FBR_EOK);
+	if (jq_len > 0) {
+		wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &jq_len);
+		fbr_assert(wake_err == FBR_EOK);
+	}
 
 	return FBR_EOK;
 }
@@ -237,7 +241,6 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 	for (; *real_num < num; *real_num += 1) {
 		fbr_errno_t err;
 		unsigned int idx;
-		struct fbr_thread *thread_entries;
 		struct fbr_thread *thread_entry;
 
 		err = fbr_bm_malloc(&pool->threads.meta, &idx);
@@ -253,8 +256,9 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		}
 		fbr_assert(err == FBR_EOK);
 
-		thread_entries = ck_pr_load_ptr(&pool->threads.array);
-		thread_entry = &thread_entries[idx];
+		thread_entry = &pool->threads.array[idx];
+
+		printf("%p -> %p\n", (void *)pool->threads.array, (void *)thread_entry);
 
 		/* Canceled must be visible before the type */
 		ck_pr_store_int(&thread_entry->thread.internal.canceled, 0);

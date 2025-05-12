@@ -3,8 +3,8 @@
 
 #include <ck_pr.h>
 
+#include <fbr.h>
 #include <fbr_errno.h>
-#include <fbr_new.h>
 
 #include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
@@ -194,6 +194,7 @@ handle_exit: {
 		}
 		return;
 	}
+	fbr_unreachable();
 }
 }
 
