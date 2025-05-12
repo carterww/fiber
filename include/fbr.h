@@ -60,7 +60,7 @@ typedef struct fbr_init_result fbr_init_result_t;
 
 fbr_init_result_t fbr_init(const fbr_init_options_t *options);
 
-void fiber_free(fbr_pool_t *pool);
+void fbr_free(fbr_pool_t *pool);
 
 fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job);
 

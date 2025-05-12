@@ -18,8 +18,6 @@
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 				     uint32_t *real_num);
 
-static void fbr_worker_cancel(struct fbr_pool *pool, unsigned int num);
-
 struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 {
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
@@ -109,16 +107,17 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	return res;
 init_error: {
 	pool = (struct fbr_pool *)pool_m;
-	ck_pr_fas_int(&pool->active, 0);
+	(void)ck_pr_fas_int(&pool->active, 0);
 	ck_pr_barrier();
 
-	if (worker_create_errno != FBR_EOK || opt->thread_num != worker_num) {
-		fbr_worker_cancel((struct fbr_pool *)pool_m, opt->thread_num);
-	}
 	/* If any workers were spawned then the last one to exit will be responsible
 	 * for cleaning up the other resources.
 	 */
 	if (worker_num > 0) {
+		uint32_t to_wake = worker_num;
+		ck_pr_faa_32((uint32_t *)&pool->thread_kill_num, opt->thread_max);
+		fbr_errno_t wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &to_wake);
+		fbr_assert(wake_err == FBR_EOK);
 		return res;
 	}
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
@@ -134,10 +133,10 @@ init_error: {
 }
 }
 
-void fiber_free(fbr_pool_t *pool)
+void fbr_free(fbr_pool_t *pool)
 {
 	int active;
-	unsigned int thread_num;
+	uint32_t thread_num;
 	if (pool == NULL) {
 		return;
 	}
@@ -148,10 +147,8 @@ void fiber_free(fbr_pool_t *pool)
 	ck_pr_fence_atomic_load();
 	thread_num = ck_pr_load_uint(&pool->thread_num);
 	if (thread_num > 0) {
-		/* There is at least one thread that will see active = false
-		 * and cleanup.
-		 */
-		fbr_worker_cancel(pool, thread_num);
+		(void)ck_pr_fas_32((uint32_t *)&pool->thread_kill_num, pool->thread_max * 2);
+		fbr_futex_wake(&pool->tw_ql.queue_length, &thread_num);
 		return;
 	}
 	/* Cleanup here if no threads in pool */
@@ -258,8 +255,6 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 
 		thread_entry = &pool->threads.array[idx];
 
-		printf("%p -> %p\n", (void *)pool->threads.array, (void *)thread_entry);
-
 		/* Canceled must be visible before the type */
 		ck_pr_store_int(&thread_entry->thread.internal.canceled, 0);
 		ck_pr_fence_store();
@@ -274,40 +269,4 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		fbr_assert(err == FBR_EOK);
 	}
 	return FBR_EOK;
-}
-
-static void fbr_worker_cancel(struct fbr_pool *pool, unsigned int num)
-{
-	uint32_t count = 0;
-	uint32_t idx;
-	struct fbr_bm_alloc_iterator iter;
-
-	fbr_bm_iterator_init(&pool->threads.meta, &iter);
-	while (count < num &&
-	       fbr_bm_iterator_next(&pool->threads.meta, &iter, &idx)) {
-		struct fbr_thread *thread_arr;
-		struct fbr_thread *thread_entry;
-		int type_int;
-		enum fbr_thread_type type;
-		fbr_errno_t err;
-
-		thread_arr = ck_pr_load_ptr(&pool->threads.array);
-		thread_entry = &thread_arr[idx];
-
-		type_int = ck_pr_load_int((int *)&thread_entry->type);
-		type = (enum fbr_thread_type)type_int;
-		if (type != FBR_THREAD_TYPE_INTERNAL) {
-			continue;
-		}
-		ck_pr_fence_load_atomic();
-		int canceled_old = ck_pr_fas_int(
-			&thread_entry->thread.internal.canceled, 1);
-		/* Don't cancel if previous value was not 0. Someone else did or doing */
-		if (canceled_old != 0) {
-			continue;
-		}
-		err = fbr_thread_cancel(&thread_entry->thread.internal.id);
-		fbr_assert(err == FBR_EOK);
-		++count;
-	}
 }

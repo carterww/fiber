@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <unistd.h>
 
 #include <fbr.h>
 #include <fbr_jq_ring.h>
@@ -12,5 +13,8 @@ int main(void)
 	if (init_res.error != FBR_EOK) {
 		return 1;
 	}
+	sleep(1);
+	fbr_free(init_res.pool);
+	sleep(2);
 	return 0;
 }

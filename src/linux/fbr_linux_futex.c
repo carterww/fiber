@@ -77,12 +77,11 @@ fbr_errno_t fbr_futex_wait(uint32_t *futex, uint32_t expected)
 		syscall_res = futex_syscall_linux_timeout(
 			futex, NULL, FUTEX_WAIT | FUTEX_PRIVATE_FLAG, expected,
 			NULL, 0);
-		if (syscall_res == -1 && errno != EINTR) {
+		if (syscall_res == 0) {
+			return FBR_EOK;
+		} else if (syscall_res == -1 && errno != EINTR) {
 			break;
 		}
-	}
-	if (syscall_res == 0) {
-		return FBR_EOK;
 	}
 	if (value != expected || errno == EAGAIN) {
 		return FBR_EAGAIN;
@@ -146,7 +145,9 @@ fbr_errno_t fbr_futex_wait_timeout(uint32_t *futex, uint32_t expected,
 		}
 		waited_ms += sec * 1000;
 		waited_ms += ns / 1000000;
-		if (syscall_res == -1 && errno != EINTR) {
+		if (syscall_res == 0) {
+			break;
+		} else if (syscall_res == -1 && errno != EINTR) {
 			break;
 		}
 	}

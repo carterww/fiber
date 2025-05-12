@@ -1,4 +1,3 @@
-#include "fbr_cc.h"
 #include <limits.h>
 
 #include <ck_pr.h>
@@ -7,6 +6,7 @@
 #include <fbr_errno.h>
 
 #include "fbr_bm_alloc.h"
+#include "fbr_cc.h"
 #include "fbr_debug.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
@@ -16,6 +16,7 @@
 enum fbr_trysleep_queue_wakeup_reason {
 	FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE = 0,
 	FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME,
+	FBR_TRYSLEEP_QUEUE_WAKE_POOL_INACTIVE,
 };
 
 static void fbr_worker_cleanup(void *tls_ptr);
@@ -144,6 +145,8 @@ loop:
 				goto loop;
 			case FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME:
 				goto handle_exit;
+			case FBR_TRYSLEEP_QUEUE_WAKE_POOL_INACTIVE:
+				return;
 			default:
 				fbr_unreachable();
 			}
@@ -156,7 +159,9 @@ loop:
 		/* Keep popping jobs without altering thread working count */
 		while (true) {
 			(void)buff.cb(buff.cb_arg);
-			if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
+			if (ck_pr_load_int(&pool->thread_kill_num) > 0 ||
+			    !fbr_pool_active(pool)) {
+				ck_pr_dec_32(&pool->tw_ql.thread_working);
 				goto handle_exit;
 			}
 			pop_num =
@@ -169,7 +174,8 @@ loop:
 		}
 		ck_pr_dec_32(&pool->tw_ql.thread_working);
 		ck_pr_fence_atomic_load();
-		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
+		if (ck_pr_load_int(&pool->thread_kill_num) > 0 ||
+		    !fbr_pool_active(pool)) {
 			goto handle_exit;
 		}
 	}
@@ -218,16 +224,14 @@ static void fbr_worker_cleanup(void *tls_ptr)
 	tls->pool = NULL;
 	tls->thread_idx = UINT_MAX;
 
+	if (!tls->on_stack) {
+		pool->alloc.free(tls);
+	}
 	/* This thread is responsible for cleaning up the pool because it is
 	 * last in inactive pool.
 	 */
 	if (!active && last_alive) {
 		fbr_free_sync(pool);
-	}
-	pool = NULL;
-
-	if (!tls->on_stack) {
-		pool->alloc.free(tls);
 	}
 }
 
@@ -236,19 +240,26 @@ fbr_worker_trysleep_on_queue(struct fbr_pool *pool)
 {
 	uint32_t queue_len;
 	fbr_errno_t err;
+
 	while (true) {
+		/* Check if we need to handle any important flags before
+		 * sleeping.
+		 */
+		if (!fbr_pool_active(pool)) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_POOL_INACTIVE;
+		}
+		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME;
+		}
 		err = fbr_futex_wait(&pool->tw_ql.queue_length, 0);
 		fbr_assert(err == FBR_EOK || err == FBR_EAGAIN);
 		/* Queue is not empty, don't sleep */
 		if (err == FBR_EAGAIN) {
 			return FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE;
 		}
-		/* Either someone woke us up or it's a spurious wake up. */
-		/* Check if we need to handle any important flags */
-		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
-			return FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME;
-		}
-		/* Check the queue length condition */
+		/* Check the queue length condition to ensure it's not a spurious
+		 * wakeup
+		 */
 		queue_len = ck_pr_load_32(&pool->tw_ql.queue_length);
 		if (queue_len != 0) {
 			return FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE;
