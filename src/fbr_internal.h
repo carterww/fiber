@@ -7,37 +7,8 @@
 
 #include <fbr.h>
 
-#include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
-#include "fbr_thread.h"
-
-enum fbr_thread_type {
-	FBR_THREAD_TYPE_NONE = 0,
-	FBR_THREAD_TYPE_INTERNAL = 1,
-	FBR_THREAD_TYPE_EXTERNAL = 2,
-};
-
-struct fbr_thread_internal {
-	tid_t id;
-	int canceled;
-};
-
-struct fbr_thread_external {
-	unsigned long id;
-};
-
-struct fbr_thread {
-	enum fbr_thread_type type;
-	union {
-		struct fbr_thread_internal internal;
-		struct fbr_thread_external external;
-	} thread;
-};
-
-struct fbr_thread_entries {
-	struct fbr_bm_alloc_meta meta;
-	struct fbr_thread *array;
-};
+#include "fbr_thread_entries.h"
 
 struct fbr_tw_ql_packed {
 	uint32_t thread_working;
@@ -85,14 +56,12 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 {
 	void *jq;
 	void (*jq_free)(void *);
-	struct fbr_bm_alloc_meta *meta;
 	void (*alloc_free)(void *);
 
 	fbr_assert(pool != NULL);
 
 	jq = pool->job_queue;
 	jq_free = pool->job_queue_ops.free;
-	meta = &pool->threads.meta;
 	alloc_free = pool->alloc.free;
 
 	fbr_assert(jq != NULL);
@@ -116,7 +85,7 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	jq_free(jq);
 
 	/* Free thread bm allocator */
-	fbr_bm_alloc_free(meta, alloc_free);
+	fbr_thread_entries_free(&pool->threads, alloc_free);
 
 	/* Free the pool */
 	alloc_free(pool);

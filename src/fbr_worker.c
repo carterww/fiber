@@ -5,12 +5,12 @@
 #include <fbr.h>
 #include <fbr_errno.h>
 
-#include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
 #include "fbr_debug.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
 #include "fbr_thread.h"
+#include "fbr_thread_entries.h"
 #include "fbr_worker.h"
 
 enum fbr_trysleep_queue_wakeup_reason {
@@ -68,7 +68,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	struct fbr_worker_tls *tls;
 	struct fbr_thread *entries;
 	struct fbr_thread *entry;
-	int canceled_old;
 
 	/* Don't allow thread to be canceled during setup */
 	err_setup = fbr_thread_cancel_disable();
@@ -85,10 +84,14 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	entries = ck_pr_load_ptr(&pool->threads.array);
 	entry = &entries[thread_idx];
 
+	/* A race is possible if we don't wait for this to be
+	 * true.
+	 */
+	while (ck_pr_load_int(&entry->started) == 0)
+		;
+
 	tls = pool->alloc.malloc(sizeof(*tls));
 	if (tls == NULL) {
-		canceled_old =
-			ck_pr_fas_int(&entry->thread.internal.canceled, 1);
 		struct fbr_worker_tls tls_stack = {
 			pool,
 			thread_id,
@@ -96,12 +99,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 			true,
 		};
 		fbr_worker_cleanup(&tls_stack);
-		/* Someone tried to cancel this thread but canceling was disabled.
-		 * This should not be done before calling the cleanup function.
-		 */
-		if (canceled_old != 0) {
-			fbr_thread_cancel_enable();
-		}
 		fbr_thread_exit(NULL);
 		return NULL;
 	}
@@ -119,13 +116,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	fbr_worker_runner_loop(pool);
 
 	/* Reaching this point means the thread is trying to end itself. */
-	canceled_old = ck_pr_fas_int(&entry->thread.internal.canceled, 1);
-	/* If canceled was 0 then nobody will or did call fbr_thread_cancel on this
-	 * thread.
-	 */
-	if (canceled_old == 0) {
-		fbr_thread_cancel_disable();
-	}
+	fbr_thread_cancel_disable();
 	fbr_thread_cleanup_pop(1);
 	fbr_thread_exit(NULL);
 	return NULL;
@@ -214,13 +205,13 @@ static void fbr_worker_cleanup(void *tls_ptr)
 	struct fbr_pool *pool = tls->pool;
 	fbr_assert(pool != NULL);
 
-	fbr_bm_free(&pool->threads.meta, tls->thread_idx);
+	fbr_thread_entry_free(&pool->threads, tls->thread_idx);
 	ck_pr_fence_atomic();
 	last_alive = ck_pr_dec_uint_is_zero(&pool->thread_num);
 	ck_pr_fence_atomic_load();
 	active = ck_pr_load_int(&pool->active);
 
-	/* Pool is possibly going to be freed. */
+	/* Pool is possibly going to be freed so don't use these. */
 	tls->pool = NULL;
 	tls->thread_idx = UINT_MAX;
 
@@ -253,6 +244,15 @@ fbr_worker_trysleep_on_queue(struct fbr_pool *pool)
 		}
 		err = fbr_futex_wait(&pool->tw_ql.queue_length, 0);
 		fbr_assert(err == FBR_EOK || err == FBR_EAGAIN);
+		/* Check if we need to handle any important flags after
+		 * waking up.
+		 */
+		if (!fbr_pool_active(pool)) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_POOL_INACTIVE;
+		}
+		if (ck_pr_load_int(&pool->thread_kill_num) > 0) {
+			return FBR_TRYSLEEP_QUEUE_WAKE_KILLING_TIME;
+		}
 		/* Queue is not empty, don't sleep */
 		if (err == FBR_EAGAIN) {
 			return FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE;

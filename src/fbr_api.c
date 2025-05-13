@@ -8,11 +8,11 @@
 #include <fbr.h>
 #include <fbr_errno.h>
 
-#include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
 #include "fbr_thread.h"
+#include "fbr_thread_entries.h"
 #include "fbr_worker.h"
 
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
@@ -23,7 +23,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
 	struct fbr_pool_mutable *pool_m = NULL;
 	struct fbr_pool *pool = NULL;
-	struct fbr_thread *threads = NULL;
+	fbr_errno_t thread_entry_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
 	uint32_t worker_num = 0;
@@ -67,19 +67,12 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	 * resources.
 	 */
 
-	/* Allocate threads bm allocator. */
-	threads = fbr_bm_alloc_init(&pool_m->threads.meta,
-				    sizeof(*pool_m->threads.array),
-				    opt->thread_max, opt->allocator.malloc);
-	if (threads == NULL) {
-		res.error = FBR_ENOMEM;
+	/* Init threads allocator. */
+	thread_entry_err = fbr_thread_entries_init(
+		&pool_m->threads, opt->thread_max, opt->allocator.malloc);
+	if (thread_entry_err != FBR_EOK) {
+		res.error = thread_entry_err;
 		goto init_error;
-	}
-	pool_m->threads.array = threads;
-	for (unsigned int i = 0; i < opt->thread_max; ++i) {
-		struct fbr_thread *t;
-		t = &pool_m->threads.array[i];
-		t->type = FBR_THREAD_TYPE_NONE;
 	}
 
 	/* Initialize job queue */
@@ -115,16 +108,19 @@ init_error: {
 	 */
 	if (worker_num > 0) {
 		uint32_t to_wake = worker_num;
-		ck_pr_faa_32((uint32_t *)&pool->thread_kill_num, opt->thread_max);
-		fbr_errno_t wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &to_wake);
+		ck_pr_faa_32((uint32_t *)&pool->thread_kill_num,
+			     opt->thread_max);
+		fbr_errno_t wake_err =
+			fbr_futex_wake(&pool->tw_ql.queue_length, &to_wake);
 		fbr_assert(wake_err == FBR_EOK);
 		return res;
 	}
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
 		opt->queue_ops.free(queue_res.queue);
 	}
-	if (threads != NULL) {
-		fbr_bm_alloc_free(&pool->threads.meta, opt->allocator.free);
+	if (thread_entry_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_thread_entries_free(&pool->threads, opt->allocator.free);
 	}
 	if (pool != NULL) {
 		opt->allocator.free(pool);
@@ -147,12 +143,14 @@ void fbr_free(fbr_pool_t *pool)
 	ck_pr_fence_atomic_load();
 	thread_num = ck_pr_load_uint(&pool->thread_num);
 	if (thread_num > 0) {
-		(void)ck_pr_fas_32((uint32_t *)&pool->thread_kill_num, pool->thread_max * 2);
+		(void)ck_pr_fas_32((uint32_t *)&pool->thread_kill_num,
+				   pool->thread_max * 2);
 		fbr_futex_wake(&pool->tw_ql.queue_length, &thread_num);
 		return;
+	} else {
+		/* Cleanup here if no threads in pool */
+		fbr_free_sync(pool);
 	}
-	/* Cleanup here if no threads in pool */
-	fbr_free_sync(pool);
 }
 
 fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
@@ -174,7 +172,6 @@ fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
 		return FBR_EQUEUE_PUSH;
 	}
 	jq_len = ck_pr_faa_32(&pool->tw_ql.queue_length, push_num) + push_num;
-	ck_pr_barrier();
 	if (jq_len > 0) {
 		wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &jq_len);
 		fbr_assert(wake_err == FBR_EOK);
@@ -240,7 +237,9 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		unsigned int idx;
 		struct fbr_thread *thread_entry;
 
-		err = fbr_bm_malloc(&pool->threads.meta, &idx);
+		err = fbr_thread_entry_malloc(&pool->threads,
+					      FBR_THREAD_TYPE_INTERNAL, &idx);
+
 		/* The pool will not allow more than pool->thread_max to be spawned
 		 * so in theory this shouldn't happen. In reality there are cases
 		 * when the slots were full and and one was just freed behind the
@@ -254,17 +253,15 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		fbr_assert(err == FBR_EOK);
 
 		thread_entry = &pool->threads.array[idx];
-
-		/* Canceled must be visible before the type */
-		ck_pr_store_int(&thread_entry->thread.internal.canceled, 0);
-		ck_pr_fence_store();
-		ck_pr_store_int((int *)&thread_entry->type, (int)FBR_THREAD_TYPE_INTERNAL);
 		err = fbr_thread_create(&thread_entry->thread.internal.id,
 					fbr_worker_runner_internal,
 					(void *)pool);
 		if (err != FBR_EOK) {
 			return err;
 		}
+		int prev = ck_pr_fas_int(&thread_entry->started, 1);
+		fbr_assert(prev == 0);
+		ck_pr_barrier();
 		err = fbr_thread_detach(&thread_entry->thread.internal.id);
 		fbr_assert(err == FBR_EOK);
 	}
