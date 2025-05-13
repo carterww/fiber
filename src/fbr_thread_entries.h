@@ -80,6 +80,28 @@ fbr_thread_entry_ptr_to_idx(struct fbr_thread_entries *te, struct fbr_thread *t)
 	return (uint32_t)(t - te->array);
 }
 
+inline static bool fbr_thread_entry_get_internal(struct fbr_thread_entries *te,
+						 const tid_t *tid,
+						 uint32_t *idx)
+{
+	struct fbr_bm_alloc_iterator iter;
+
+	fbr_bm_iterator_init(&te->meta, &iter);
+
+	while (fbr_bm_iterator_next(&te->meta, &iter, idx)) {
+		int type_int;
+		enum fbr_thread_type type;
+		struct fbr_thread *entry = &te->array[*idx];
+		type_int = ck_pr_load_int((int *)&entry->type);
+		type = (enum fbr_thread_type)type_int;
+		if (type == FBR_THREAD_TYPE_INTERNAL &&
+		    fbr_thread_tid_equal(tid, &entry->thread.internal.id)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 inline static fbr_errno_t fbr_thread_entry_malloc(struct fbr_thread_entries *te,
 						  enum fbr_thread_type type,
 						  uint32_t *idx)

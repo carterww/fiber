@@ -24,40 +24,6 @@ static void fbr_worker_cleanup(void *tls_ptr);
 static enum fbr_trysleep_queue_wakeup_reason
 fbr_worker_trysleep_on_queue(struct fbr_pool *pool);
 
-static bool fbr_worker_thread_entry_index_get(const struct fbr_pool *pool,
-					      const tid_t *tid,
-					      unsigned int *idx)
-{
-	const unsigned int entries_num = FBR_BM_ALLOC_CAP(&pool->threads.meta);
-	struct fbr_thread *entries = ck_pr_load_ptr(&pool->threads.array);
-	for (unsigned int i = 0; i < entries_num; ++i) {
-		int type_int;
-		enum fbr_thread_type type;
-		struct fbr_thread *entry = &entries[i];
-		type_int = ck_pr_load_int((int *)&entry->type);
-		type = (enum fbr_thread_type)type_int;
-		if (type == FBR_THREAD_TYPE_INTERNAL &&
-		    fbr_thread_tid_equal(tid, &entry->thread.internal.id)) {
-			*idx = i;
-			return true;
-		}
-	}
-	return false;
-}
-
-static struct fbr_thread *
-fbr_worker_thread_entry_get(const struct fbr_pool *pool, const tid_t *tid)
-{
-	unsigned int idx;
-	if (fbr_worker_thread_entry_index_get(pool, tid, &idx)) {
-		struct fbr_thread *entries =
-			ck_pr_load_ptr(&pool->threads.array);
-		return &entries[idx];
-	} else {
-		return NULL;
-	}
-}
-
 void *fbr_worker_runner_internal(void *pool_ptr)
 {
 	struct fbr_pool *pool;
@@ -77,8 +43,8 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	fbr_assert(pool != NULL);
 	fbr_assert(pool->threads.array != NULL);
 	thread_id = fbr_thread_self();
-	thread_entry_found = fbr_worker_thread_entry_index_get(pool, &thread_id,
-							       &thread_idx);
+	thread_entry_found = fbr_thread_entry_get_internal(
+		&pool->threads, &thread_id, &thread_idx);
 	fbr_assert(thread_entry_found == true);
 	ck_pr_inc_uint(&pool->thread_num);
 	entries = ck_pr_load_ptr(&pool->threads.array);
@@ -89,6 +55,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	 */
 	while (ck_pr_load_int(&entry->started) == 0)
 		;
+	printf("started\n");
 
 	/* I'd rather put this on the stack but that may lead to undefined behavior
 	 * because it is the param of a fbr_thread_cleanup_pop function

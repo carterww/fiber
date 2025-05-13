@@ -77,7 +77,8 @@ inline static fbr_errno_t fbr_bm_malloc(struct fbr_bm_alloc_meta *meta,
 	fbr_assert(index != NULL);
 
 	ck_bitmap_iterator_init(&iter, meta->bm);
-	while (ck_bitmap_next_unset(meta->bm, &iter, &free_idx)) {
+	while (ck_bitmap_next_unset(meta->bm, &iter, &free_idx) &&
+	       free_idx < FBR_BM_ALLOC_CAP(meta)) {
 		bool old = ck_bitmap_bts(meta->bm, free_idx);
 		/* Bit's old value was 0. Successfully grabbed index */
 		if (!old) {
@@ -108,7 +109,11 @@ inline static bool fbr_bm_iterator_next(struct fbr_bm_alloc_meta *meta,
 					struct fbr_bm_alloc_iterator *iter,
 					unsigned int *idx)
 {
-	return ck_bitmap_next(meta->bm, &iter->bm_iter, idx);
+	bool res = ck_bitmap_next(meta->bm, &iter->bm_iter, idx);
+	if (*idx >= FBR_BM_ALLOC_CAP(meta)) {
+		return false;
+	}
+	return res;
 }
 
 #endif /* _FBR_BM_ALLOC_H */

@@ -195,9 +195,33 @@ fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)
 	return fbr_worker_runner_external(pool, thread_id);
 }
 
-fbr_errno_t fbr_thread_add(fbr_pool_t *pool, unsigned int thread_num);
+fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
+{
+	fbr_errno_t worker_create_err;
+	uint32_t expected_start;
 
-fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, unsigned int thread_num);
+	if (pool == NULL || tnum == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (*tnum == 0) {
+		return FBR_EOK;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+
+	expected_start = *tnum;
+	worker_create_err = fbr_worker_create(pool, expected_start, tnum);
+	if (worker_create_err != FBR_EOK) {
+		return worker_create_err;
+	}
+	if (expected_start != *tnum) {
+		return FBR_ENO_RSC;
+	}
+	return FBR_EOK;
+}
+
+fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum);
 
 uint32_t fbr_thread_working(const fbr_pool_t *pool)
 {

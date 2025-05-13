@@ -36,8 +36,7 @@ struct fbr_queue_init_result {
 struct fbr_queue_ops {
 	uint32_t (*push)(void *, const struct fbr_job *);
 	uint32_t (*pop)(void *, struct fbr_job *);
-	struct fbr_queue_init_result (*init)(uint32_t,
-					     struct fbr_allocator);
+	struct fbr_queue_init_result (*init)(uint32_t, struct fbr_allocator);
 	void (*free)(void *);
 };
 typedef struct fbr_queue_ops fbr_queue_ops_t;
@@ -70,7 +69,7 @@ fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
 fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id);
 
-fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t thread_num);
+fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *thread_num);
 
 fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t thread_num);
 
