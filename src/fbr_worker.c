@@ -55,7 +55,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	 */
 	while (ck_pr_load_int(&entry->started) == 0)
 		;
-	printf("started\n");
 
 	/* I'd rather put this on the stack but that may lead to undefined behavior
 	 * because it is the param of a fbr_thread_cleanup_pop function

@@ -17,6 +17,7 @@ int main(void)
 	uint32_t started = 8;
 	/* This will only start 2 */
 	fbr_thread_add(init_res.pool, &started);
+	fbr_thread_remove(init_res.pool, 5);
 	sleep(1);
 	fbr_free(init_res.pool);
 	sleep(2);

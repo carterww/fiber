@@ -133,6 +133,7 @@ void fbr_free(fbr_pool_t *pool)
 {
 	int active;
 	uint32_t thread_num;
+
 	if (pool == NULL) {
 		return;
 	}
@@ -221,7 +222,27 @@ fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
 	return FBR_EOK;
 }
 
-fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum);
+fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum)
+{
+	uint32_t thread_num;
+
+	if (pool == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (tnum == 0) {
+		return FBR_EOK;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+	ck_pr_add_32((uint32_t *)&pool->thread_kill_num, tnum);
+	ck_pr_fence_atomic_load();
+	thread_num = ck_pr_load_uint(&pool->thread_num);
+	if (thread_num > 0) {
+		fbr_futex_wake(&pool->tw_ql.queue_length, &thread_num);
+	}
+	return FBR_EOK;
+}
 
 uint32_t fbr_thread_working(const fbr_pool_t *pool)
 {
