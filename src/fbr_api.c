@@ -184,6 +184,17 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool);
 
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
+fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)
+{
+	if (pool == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+	return fbr_worker_runner_external(pool, thread_id);
+}
+
 fbr_errno_t fbr_thread_add(fbr_pool_t *pool, unsigned int thread_num);
 
 fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, unsigned int thread_num);
@@ -259,8 +270,8 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		if (err != FBR_EOK) {
 			return err;
 		}
-		int prev = ck_pr_fas_int(&thread_entry->started, 1);
-		fbr_assert(prev == 0);
+		int prev_started = ck_pr_fas_int(&thread_entry->started, 1);
+		fbr_assert(prev_started == 0);
 		ck_pr_barrier();
 		err = fbr_thread_detach(&thread_entry->thread.internal.id);
 		fbr_assert(err == FBR_EOK);

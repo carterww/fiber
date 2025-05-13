@@ -62,7 +62,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 {
 	struct fbr_pool *pool;
 	tid_t thread_id;
-	unsigned int thread_idx;
+	uint32_t thread_idx;
 	bool thread_entry_found;
 	fbr_errno_t err_setup;
 	struct fbr_worker_tls *tls;
@@ -80,7 +80,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	thread_entry_found = fbr_worker_thread_entry_index_get(pool, &thread_id,
 							       &thread_idx);
 	fbr_assert(thread_entry_found == true);
-	ck_pr_add_uint(&pool->thread_num, 1);
+	ck_pr_inc_uint(&pool->thread_num);
 	entries = ck_pr_load_ptr(&pool->threads.array);
 	entry = &entries[thread_idx];
 
@@ -90,12 +90,14 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	while (ck_pr_load_int(&entry->started) == 0)
 		;
 
+	/* I'd rather put this on the stack but that may lead to undefined behavior
+	 * because it is the param of a fbr_thread_cleanup_pop function
+	 */
 	tls = pool->alloc.malloc(sizeof(*tls));
 	if (tls == NULL) {
 		struct fbr_worker_tls tls_stack = {
-			pool,
-			thread_id,
-			thread_idx,
+			pool,	       FBR_THREAD_TYPE_INTERNAL,
+			{ thread_id }, thread_idx,
 			true,
 		};
 		fbr_worker_cleanup(&tls_stack);
@@ -103,7 +105,8 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 		return NULL;
 	}
 	tls->pool = pool;
-	tls->thread_id = thread_id;
+	tls->thread_type = FBR_THREAD_TYPE_INTERNAL;
+	tls->tid.thread_id_int = thread_id;
 	tls->thread_idx = thread_idx;
 	tls->on_stack = false;
 
@@ -120,6 +123,39 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	fbr_thread_cleanup_pop(1);
 	fbr_thread_exit(NULL);
 	return NULL;
+}
+
+fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
+				       uint64_t thread_id)
+{
+	uint32_t thread_idx;
+	fbr_errno_t te_malloc_err;
+	struct fbr_thread *thread_entry;
+	struct fbr_worker_tls tls;
+
+	fbr_assert(pool != NULL);
+	fbr_assert(pool->threads.array != NULL);
+
+	te_malloc_err = fbr_thread_entry_malloc(
+		&pool->threads, FBR_THREAD_TYPE_EXTERNAL, &thread_idx);
+	if (te_malloc_err == FBR_ENOMEM) {
+		return FBR_ENOMEM;
+	}
+	fbr_assert(te_malloc_err == FBR_EOK);
+	thread_entry = &pool->threads.array[thread_idx];
+
+	ck_pr_store_64(&thread_entry->thread.external.id, thread_id);
+	ck_pr_fence_store_atomic();
+	(void)ck_pr_fas_int(&thread_entry->started, 1);
+	ck_pr_inc_uint(&pool->thread_num);
+
+	fbr_worker_runner_loop(pool);
+
+	tls = (struct fbr_worker_tls){
+		pool, FBR_THREAD_TYPE_EXTERNAL, { thread_id }, thread_idx, true
+	};
+	fbr_worker_cleanup(&tls);
+	return FBR_EOK;
 }
 
 void fbr_worker_runner_loop(struct fbr_pool *pool)

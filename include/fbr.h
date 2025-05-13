@@ -68,7 +68,7 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool);
 
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
-fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool);
+fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id);
 
 fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t thread_num);
 

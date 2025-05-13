@@ -24,7 +24,7 @@ struct fbr_thread_internal {
 };
 
 struct fbr_thread_external {
-	unsigned long id;
+	uint64_t id;
 };
 
 struct fbr_thread {
