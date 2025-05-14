@@ -18,6 +18,7 @@ int main(void)
 	/* This will only start 2 */
 	fbr_thread_add(init_res.pool, &started);
 	fbr_thread_remove(init_res.pool, 5);
+	fbr_wait(init_res.pool);
 	sleep(1);
 	fbr_free(init_res.pool);
 	sleep(2);

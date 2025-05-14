@@ -9,10 +9,12 @@
 #include <fbr_errno.h>
 
 #include "fbr_debug.h"
+#include "fbr_epoch.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
 #include "fbr_thread.h"
 #include "fbr_thread_entries.h"
+#include "fbr_wait.h"
 #include "fbr_worker.h"
 
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
@@ -21,9 +23,10 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 {
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
-	struct fbr_pool_mutable *pool_m = NULL;
 	struct fbr_pool *pool = NULL;
 	fbr_errno_t thread_entry_err = FBR_EGENERIC;
+	fbr_errno_t waiters_err = FBR_EGENERIC;
+	fbr_errno_t wait_epoch_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
 	uint32_t worker_num = 0;
@@ -47,21 +50,21 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		return res;
 	}
 	/* Allocate the pool and set primitives */
-	pool_m = opt->allocator.malloc(sizeof(*pool_m));
-	if (pool_m == NULL) {
+	pool = opt->allocator.malloc(sizeof(*pool));
+	if (pool == NULL) {
 		res.error = FBR_ENOMEM;
 		return res;
 	}
-	pool_m->job_queue = NULL;
-	pool_m->job_queue_ops = opt->queue_ops;
-	pool_m->active = 1;
-	pool_m->thread_num = 0;
-	pool_m->tw_ql.thread_working = 0;
-	pool_m->tw_ql.queue_length = 0;
-	pool_m->thread_kill_num = 0;
-	pool_m->thread_max = opt->thread_max;
-	pool_m->callers_max = opt->callers_max;
-	pool_m->alloc = opt->allocator;
+	pool->job_queue = NULL;
+	pool->job_queue_ops = opt->queue_ops;
+	pool->active = 1;
+	pool->tw_ql.items.thread_working = 0;
+	pool->tw_ql.items.queue_length = 0;
+	pool->thread_kill_num = 0;
+	pool->thread_num = 0;
+	pool->thread_max = opt->thread_max;
+	pool->callers_max = opt->callers_max;
+	pool->alloc = opt->allocator;
 
 	/* Initialization after this point must goto init_error in order to cleanup
 	 * resources.
@@ -69,9 +72,28 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 
 	/* Init threads allocator. */
 	thread_entry_err = fbr_thread_entries_init(
-		&pool_m->threads, opt->thread_max, opt->allocator.malloc);
+		&pool->threads, opt->thread_max, opt->allocator.malloc);
 	if (thread_entry_err != FBR_EOK) {
 		res.error = thread_entry_err;
+		goto init_error;
+	}
+
+	/* Init waiters allocator. These cannot be reclaimed instantly so they
+	 * are overallocated.
+	 */
+	waiters_err = fbr_wait_entries_init(
+		&pool->waiters, opt->callers_max * 4, opt->allocator.malloc);
+	if (waiters_err != FBR_EOK) {
+		res.error = waiters_err;
+		goto init_error;
+	}
+
+	/* Init wait epoch allocator. */
+	wait_epoch_err = fbr_epoch_entries_init(
+		&pool->wait_epoch, opt->thread_max + opt->callers_max,
+		opt->allocator.malloc);
+	if (wait_epoch_err != FBR_EOK) {
+		res.error = wait_epoch_err;
 		goto init_error;
 	}
 
@@ -81,10 +103,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		res.error = queue_res.error;
 		goto init_error;
 	}
-	pool_m->job_queue = queue_res.queue;
-
-	/* DON'T USE pool_m ANYMORE !UB!UB! */
-	pool = (struct fbr_pool *)pool_m;
+	pool->job_queue = queue_res.queue;
 
 	/* Start threads */
 	ck_pr_fence_memory(); // Make sure workers will see correct data
@@ -96,10 +115,9 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	}
 
 	res.error = FBR_EOK;
-	res.pool = (struct fbr_pool *)pool_m;
+	res.pool = pool;
 	return res;
 init_error: {
-	pool = (struct fbr_pool *)pool_m;
 	(void)ck_pr_fas_int(&pool->active, 0);
 	ck_pr_barrier();
 
@@ -108,15 +126,21 @@ init_error: {
 	 */
 	if (worker_num > 0) {
 		uint32_t to_wake = worker_num;
-		ck_pr_faa_32((uint32_t *)&pool->thread_kill_num,
-			     opt->thread_max);
-		fbr_errno_t wake_err =
-			fbr_futex_wake(&pool->tw_ql.queue_length, &to_wake);
+		fbr_errno_t wake_err = fbr_futex_wake(
+			&pool->tw_ql.items.queue_length, &to_wake);
 		fbr_assert(wake_err == FBR_EOK);
 		return res;
 	}
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
 		opt->queue_ops.free(queue_res.queue);
+	}
+	if (wait_epoch_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_epoch_entries_free(&pool->wait_epoch, opt->allocator.free);
+	}
+	if (waiters_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_wait_entries_free(&pool->waiters, opt->allocator.free);
 	}
 	if (thread_entry_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
@@ -144,9 +168,7 @@ void fbr_free(fbr_pool_t *pool)
 	ck_pr_fence_atomic_load();
 	thread_num = ck_pr_load_uint(&pool->thread_num);
 	if (thread_num > 0) {
-		(void)ck_pr_fas_32((uint32_t *)&pool->thread_kill_num,
-				   pool->thread_max * 2);
-		fbr_futex_wake(&pool->tw_ql.queue_length, &thread_num);
+		fbr_futex_wake(&pool->tw_ql.items.queue_length, &thread_num);
 		return;
 	} else {
 		/* Cleanup here if no threads in pool */
@@ -172,16 +194,62 @@ fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
 	if (push_num == 0) {
 		return FBR_EQUEUE_PUSH;
 	}
-	jq_len = ck_pr_faa_32(&pool->tw_ql.queue_length, push_num) + push_num;
+	jq_len = ck_pr_faa_32(&pool->tw_ql.items.queue_length, push_num) +
+		 push_num;
 	if (jq_len > 0) {
-		wake_err = fbr_futex_wake(&pool->tw_ql.queue_length, &jq_len);
+		wake_err = fbr_futex_wake(&pool->tw_ql.items.queue_length,
+					  &jq_len);
 		fbr_assert(wake_err == FBR_EOK);
 	}
 
 	return FBR_EOK;
 }
 
-fbr_errno_t fbr_wait(fbr_pool_t *pool);
+fbr_errno_t fbr_wait(fbr_pool_t *pool)
+{
+	fbr_errno_t res = FBR_EOK;
+	fbr_errno_t epoch_malloc_err;
+	fbr_errno_t wait_entry_err;
+	struct fbr_epoch_entry *entry;
+	uint32_t *futex;
+
+	if (pool == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+	if (fbr_wait_can_wake(pool)) {
+		return FBR_EOK;
+	}
+	epoch_malloc_err = fbr_epoch_malloc(&pool->wait_epoch, &entry);
+	if (epoch_malloc_err != FBR_EOK) {
+		return epoch_malloc_err;
+	}
+	fbr_assert(entry != NULL);
+	fbr_epoch_enter(&pool->wait_epoch, entry);
+	ck_pr_barrier();
+	wait_entry_err = fbr_wait_entry_add(&pool->waiters, &futex);
+	if (wait_entry_err != FBR_EOK) {
+		res = wait_entry_err;
+		goto epoch_exit;
+	}
+
+	/* Before going to sleep check condition again */
+	if (fbr_wait_can_wake(pool)) {
+		goto epoch_exit;
+	}
+
+	while (ck_pr_load_32(futex) == 0) {
+		res = fbr_futex_wait(futex, 0);
+	}
+
+epoch_exit:
+	fbr_epoch_exit(&pool->wait_epoch, entry);
+	ck_pr_barrier();
+	fbr_epoch_free(&pool->wait_epoch, entry);
+	return res;
+}
 
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
@@ -239,7 +307,7 @@ fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum)
 	ck_pr_fence_atomic_load();
 	thread_num = ck_pr_load_uint(&pool->thread_num);
 	if (thread_num > 0) {
-		fbr_futex_wake(&pool->tw_ql.queue_length, &thread_num);
+		fbr_futex_wake(&pool->tw_ql.items.queue_length, &thread_num);
 	}
 	return FBR_EOK;
 }
@@ -249,7 +317,7 @@ uint32_t fbr_thread_working(const fbr_pool_t *pool)
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	return ck_pr_load_32(&pool->tw_ql.thread_working);
+	return ck_pr_load_32(&pool->tw_ql.items.thread_working);
 }
 
 uint32_t fbr_jobs_pending(const fbr_pool_t *pool)
@@ -257,7 +325,7 @@ uint32_t fbr_jobs_pending(const fbr_pool_t *pool)
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	return ck_pr_load_32(&pool->tw_ql.queue_length);
+	return ck_pr_load_32(&pool->tw_ql.items.queue_length);
 }
 
 uint32_t fbr_thread_num(const fbr_pool_t *pool)
