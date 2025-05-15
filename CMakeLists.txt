@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.18)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED True)
-project(fiber VERSION 0.2.2)
+project(fiber VERSION 0.2.3)
 
 # Pthreads required
 find_package(Threads REQUIRED)
