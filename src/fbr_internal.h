@@ -13,6 +13,9 @@
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
 
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
 union fbr_tw_ql_packed {
 	struct {
 		uint32_t thread_working;
@@ -71,6 +74,8 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->job_queue_ops.pop, NULL);
 	ck_pr_store_ptr(&pool->job_queue_ops.init, NULL);
 	ck_pr_store_ptr(&pool->job_queue_ops.free, NULL);
+	ck_pr_store_ptr(&pool->waiters.array, NULL);
+	ck_pr_store_ptr(&pool->wait_epoch.array, NULL);
 	ck_pr_store_ptr(&pool->threads.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
 	ck_pr_store_ptr(&pool->alloc.free, NULL);

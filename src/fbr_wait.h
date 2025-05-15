@@ -156,8 +156,7 @@ inline static uint32_t fbr_wait_entry_retire(struct fbr_wait_entries *w,
 	}
 }
 
-inline static void fbr_wait_entry_free(struct fbr_wait_entries *w, uint32_t idx,
-				       void (*free)(void *))
+inline static void fbr_wait_entry_free(struct fbr_wait_entries *w, uint32_t idx)
 {
 	int prev_status;
 	enum fbr_wait_entry_status stat;
@@ -165,7 +164,6 @@ inline static void fbr_wait_entry_free(struct fbr_wait_entries *w, uint32_t idx,
 
 	fbr_assert(w != NULL);
 	fbr_assert(idx < w->meta.bm->n_bits);
-	fbr_assert(free != NULL);
 
 	entry = &w->array[idx];
 
@@ -176,16 +174,18 @@ inline static void fbr_wait_entry_free(struct fbr_wait_entries *w, uint32_t idx,
 	ck_pr_fence_atomic();
 	ck_pr_dec_32(&w->retired_approx);
 	ck_pr_barrier();
-	fbr_bm_alloc_free(&w->meta, free);
+	fbr_bm_free(&w->meta, idx);
+	printf("free\n");
 }
 
 inline static void fbr_wait_entries_reclaim(struct fbr_wait_entries *w,
-					    uint64_t epoch_global,
-					    void (*free)(void *))
+					    uint64_t epoch_global)
 {
 	struct fbr_bm_alloc_iterator iter;
 	uint32_t idx;
 	uint64_t epoch_thresh;
+
+	fbr_assert(w != NULL);
 
 	if (!fbr_wait_entries_reclaim_start(w)) {
 		return;
@@ -207,7 +207,7 @@ inline static void fbr_wait_entries_reclaim(struct fbr_wait_entries *w,
 		if (fbr_epoch_cmp(epoch_thresh, entry_epoch) < 0) {
 			continue;
 		}
-		fbr_wait_entry_free(w, idx, free);
+		fbr_wait_entry_free(w, idx);
 	}
 	ck_pr_barrier();
 	fbr_wait_entries_reclaim_finish(w);

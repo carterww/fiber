@@ -82,7 +82,9 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	 * are overallocated.
 	 */
 	waiters_err = fbr_wait_entries_init(
-		&pool->waiters, opt->callers_max * 4, opt->allocator.malloc);
+		&pool->waiters,
+		opt->callers_max * FBR_EPOCH_TRY_ADVANCE_NTH * 2,
+		opt->allocator.malloc);
 	if (waiters_err != FBR_EOK) {
 		res.error = waiters_err;
 		goto init_error;

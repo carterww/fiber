@@ -188,22 +188,22 @@ void fbr_worker_runner_loop(struct fbr_pool *pool)
 		fbr_epoch_malloc(&pool->wait_epoch, &wait_entry);
 	fbr_assert(wait_epoch_err == FBR_EOK);
 	fbr_assert(wait_entry != NULL);
-	// waiters_retired_threshhold = pool->callers_max / 2;
-	waiters_retired_threshhold = 1;
+	waiters_retired_threshhold = MAX(1, pool->callers_max / 2);
 loop:
 	while (true) {
 		pop_num = pool->job_queue_ops.pop(pool->job_queue, &buff);
 		if (pop_num == 0) {
 			uint64_t timestamp;
-			timestamp = ck_pr_load_64(&pool->waiters.timestamp_global);
+			timestamp =
+				ck_pr_load_64(&pool->waiters.timestamp_global);
 			/* Before possibly going to sleep check if there are any waiters */
-			// bool can_wake =
-			// 	fbr_waiters_can_wake_in_loop(pool, &timestamp);
-			// if (can_wake) {
+			bool can_wake =
+				fbr_waiters_can_wake_in_loop(pool, &timestamp);
+			if (can_wake) {
 				fbr_check_and_handle_waiters(
 					pool, wait_entry, timestamp,
 					waiters_retired_threshhold);
-			// }
+			}
 			switch (fbr_worker_trysleep_on_queue(pool)) {
 			case FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE:
 				goto loop;
@@ -406,8 +406,7 @@ static void fbr_check_and_handle_waiters(struct fbr_pool *pool,
 	if (retired_approx >= retired_threshhold) {
 		uint64_t epoch_global =
 			ck_pr_load_64(&pool->wait_epoch.epoch_global);
-		fbr_wait_entries_reclaim(&pool->waiters, epoch_global,
-					 pool->alloc.free);
+		fbr_wait_entries_reclaim(&pool->waiters, epoch_global);
 	}
 
 	ck_pr_barrier();
