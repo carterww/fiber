@@ -4,6 +4,7 @@
 #define FBR_H
 
 #include <limits.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -38,6 +39,7 @@ struct fbr_queue_ops {
 	uint32_t (*pop)(void *, struct fbr_job *);
 	struct fbr_queue_init_result (*init)(uint32_t, struct fbr_allocator);
 	void (*free)(void *);
+	bool (*job_in_queue)(void *, uint64_t);
 };
 typedef struct fbr_queue_ops fbr_queue_ops_t;
 

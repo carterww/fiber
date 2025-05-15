@@ -11,6 +11,7 @@
 #include "fbr_epoch.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
+#include "fbr_job.h"
 #include "fbr_thread.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
@@ -179,10 +180,16 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 
 void fbr_worker_runner_loop(struct fbr_pool *pool)
 {
+	struct fbr_job_entry *job_current;
 	struct fbr_epoch_entry *wait_entry;
 	struct fbr_job buff;
 	uint32_t waiters_retired_threshhold;
 	uint32_t pop_num;
+
+	fbr_errno_t job_entry_err =
+		fbr_job_entry_malloc(&pool->jobs_current, &job_current);
+	fbr_assert(job_entry_err == FBR_EOK);
+	fbr_assert(job_current != NULL);
 
 	fbr_errno_t wait_epoch_err =
 		fbr_epoch_malloc(&pool->wait_epoch, &wait_entry);
@@ -217,12 +224,18 @@ loop:
 		}
 		fbr_assert(buff.cb != NULL);
 		ck_pr_sub_32(&pool->tw_ql.items.queue_length, pop_num);
-		ck_pr_fence_atomic();
 		ck_pr_inc_32(&pool->tw_ql.items.thread_working);
+		ck_pr_store_int(&job_current->active, 1);
+		ck_pr_fence_store_atomic();
 
 		/* Keep popping jobs without altering thread working count */
 		while (true) {
+			ck_pr_fas_64(&job_current->job_id, buff.id);
+			ck_pr_barrier();
 			(void)buff.cb(buff.cb_arg);
+			ck_pr_barrier();
+			ck_pr_fas_int(&job_current->active, 0);
+			/* TODO: Check if any threads waiting on job */
 			if (ck_pr_load_int(&pool->thread_kill_num) > 0 ||
 			    !fbr_pool_active(pool)) {
 				ck_pr_dec_32(&pool->tw_ql.items.thread_working);
@@ -237,7 +250,6 @@ loop:
 			ck_pr_sub_32(&pool->tw_ql.items.queue_length, pop_num);
 		}
 		ck_pr_dec_32(&pool->tw_ql.items.thread_working);
-		ck_pr_fence_atomic_load();
 		if (ck_pr_load_int(&pool->thread_kill_num) > 0 ||
 		    !fbr_pool_active(pool)) {
 			goto handle_exit;

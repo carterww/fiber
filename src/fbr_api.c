@@ -1,5 +1,6 @@
 /* See LICENSE file for copyright and license details. */
 
+#include "fbr_job.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -25,6 +26,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 {
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
 	struct fbr_pool *pool = NULL;
+	fbr_errno_t job_entry_err = FBR_EGENERIC;
 	fbr_errno_t thread_entry_err = FBR_EGENERIC;
 	fbr_errno_t waiters_err = FBR_EGENERIC;
 	fbr_errno_t wait_epoch_err = FBR_EGENERIC;
@@ -70,6 +72,13 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	/* Initialization after this point must goto init_error in order to cleanup
 	 * resources.
 	 */
+
+	/* Init current job list allocator */
+	job_entry_err = fbr_job_entries_init(&pool->jobs_current, opt->thread_max, opt->allocator.malloc);
+	if (job_entry_err != FBR_EOK) {
+		res.error = job_entry_err;
+		goto init_error;
+	}
 
 	/* Init threads allocator. */
 	thread_entry_err = fbr_thread_entries_init(
@@ -148,6 +157,10 @@ init_error: {
 	if (thread_entry_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
 		fbr_thread_entries_free(&pool->threads, opt->allocator.free);
+	}
+	if (job_entry_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_job_entries_free(&pool->jobs_current, opt->allocator.free);
 	}
 	if (pool != NULL) {
 		opt->allocator.free(pool);

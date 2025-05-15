@@ -9,6 +9,7 @@
 
 #include "fbr_cc.h"
 #include "fbr_epoch.h"
+#include "fbr_job.h"
 #include "fbr_platform.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
@@ -38,12 +39,11 @@ struct fbr_pool {
 	char _pad2[FBR_CACHELINE_BYTES - sizeof(int32_t)];
 	uint32_t thread_num;
 	char _pad3[FBR_CACHELINE_BYTES - sizeof(uint32_t)];
+
+	struct fbr_job_entries jobs_current;
 	struct fbr_thread_entries threads;
-	char _pad4[FBR_CACHELINE_BYTES - sizeof(struct fbr_thread_entries)];
 	struct fbr_wait_entries waiters;
-	char _pad5[FBR_CACHELINE_BYTES - sizeof(struct fbr_wait_entries)];
 	struct fbr_epoch_entries wait_epoch;
-	char _pad6[FBR_CACHELINE_BYTES - sizeof(struct fbr_epoch_entries)];
 
 	uint32_t thread_max;
 	uint32_t callers_max;
@@ -74,9 +74,10 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->job_queue_ops.pop, NULL);
 	ck_pr_store_ptr(&pool->job_queue_ops.init, NULL);
 	ck_pr_store_ptr(&pool->job_queue_ops.free, NULL);
+	ck_pr_store_ptr(&pool->jobs_current.array, NULL);
+	ck_pr_store_ptr(&pool->threads.array, NULL);
 	ck_pr_store_ptr(&pool->waiters.array, NULL);
 	ck_pr_store_ptr(&pool->wait_epoch.array, NULL);
-	ck_pr_store_ptr(&pool->threads.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
 	ck_pr_store_ptr(&pool->alloc.free, NULL);
 	ck_pr_fence_memory();
@@ -84,14 +85,11 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	/* Free job queue */
 	jq_free(jq);
 
-	/* Free waiters bm allocator */
-	fbr_wait_entries_free(&pool->waiters, alloc_free);
-
-	/* Free wait epoch bm allocator */
-	fbr_epoch_entries_free(&pool->wait_epoch, alloc_free);
-
-	/* Free thread bm allocator */
+	/* Free bm allocators */
+	fbr_job_entries_free(&pool->jobs_current, alloc_free);
 	fbr_thread_entries_free(&pool->threads, alloc_free);
+	fbr_wait_entries_free(&pool->waiters, alloc_free);
+	fbr_epoch_entries_free(&pool->wait_epoch, alloc_free);
 
 	/* Free the pool */
 	alloc_free(pool);

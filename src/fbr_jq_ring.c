@@ -1,3 +1,4 @@
+#include <stdbool.h>
 #include <stdint.h>
 
 #include <ck_ring.h>
@@ -104,7 +105,10 @@ uint32_t fbr_jq_ring_push(void *vqueue,
 		fbr_bm_free(&queue->jobs.meta, entry_idx);
 		return 0;
 	}
-	*local_entry = *job;
+	ck_pr_store_64(&local_entry->id, job->id);
+	ck_pr_store_ptr((void **)&local_entry->cb, (void *)job->cb);
+	ck_pr_store_ptr(&local_entry->cb_arg, job->cb_arg);
+	ck_pr_fence_memory();
 	return 1;
 }
 
@@ -115,16 +119,23 @@ uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out)
 	CAST_QUEUE_PTR(vqueue, queue);
 	void *result;
 	struct fbr_job *local_entry;
-	unsigned int entry_idx;
+	uint32_t entry_idx;
 
 	bool success = ck_ring_dequeue_mpmc(&queue->ck_ring, queue->ck_ring_buffer, &result);
 	if (!success) {
 		return 0;
 	}
 	local_entry = (struct fbr_job *)result;
-	entry_idx = (unsigned int)(local_entry - queue->jobs.array);
+	entry_idx = (uint32_t)(local_entry - queue->jobs.array);
 	*job_out = *local_entry;
+	ck_pr_barrier();
 	fbr_bm_free(&queue->jobs.meta, entry_idx);
-
 	return 1;
+}
+
+bool fbr_jq_ring_job_in_queue(void *vqueue, uint64_t job_id)
+{
+	(void)vqueue;
+	(void)job_id;
+	return false;
 }
