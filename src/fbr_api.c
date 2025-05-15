@@ -20,6 +20,7 @@
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 				     uint32_t *real_num);
 
+FBR_ATTR_PUBLIC
 struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 {
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
@@ -155,6 +156,7 @@ init_error: {
 }
 }
 
+FBR_ATTR_PUBLIC
 void fbr_free(fbr_pool_t *pool)
 {
 	int active;
@@ -178,6 +180,7 @@ void fbr_free(fbr_pool_t *pool)
 	}
 }
 
+FBR_ATTR_PUBLIC
 fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
 {
 	uint32_t push_num;
@@ -207,6 +210,7 @@ fbr_errno_t fbr_job_push(fbr_pool_t *pool, const fbr_job_t *job)
 	return FBR_EOK;
 }
 
+FBR_ATTR_PUBLIC
 fbr_errno_t fbr_wait(fbr_pool_t *pool)
 {
 	fbr_errno_t res = FBR_EOK;
@@ -255,6 +259,7 @@ epoch_exit:
 
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
 
+FBR_ATTR_PUBLIC
 fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)
 {
 	if (pool == NULL) {
@@ -266,6 +271,7 @@ fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)
 	return fbr_worker_runner_external(pool, thread_id);
 }
 
+FBR_ATTR_PUBLIC
 fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
 {
 	fbr_errno_t worker_create_err;
@@ -292,6 +298,7 @@ fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
 	return FBR_EOK;
 }
 
+FBR_ATTR_PUBLIC
 fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum)
 {
 	uint32_t thread_num;
@@ -314,6 +321,7 @@ fbr_errno_t fbr_thread_remove(fbr_pool_t *pool, uint32_t tnum)
 	return FBR_EOK;
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_thread_working(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
@@ -322,6 +330,7 @@ uint32_t fbr_thread_working(const fbr_pool_t *pool)
 	return ck_pr_load_32(&pool->tw_ql.items.thread_working);
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_jobs_pending(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
@@ -330,6 +339,7 @@ uint32_t fbr_jobs_pending(const fbr_pool_t *pool)
 	return ck_pr_load_32(&pool->tw_ql.items.queue_length);
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_thread_num(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
@@ -338,6 +348,7 @@ uint32_t fbr_thread_num(const fbr_pool_t *pool)
 	return ck_pr_load_uint(&pool->thread_num);
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_thread_max(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
@@ -346,6 +357,7 @@ uint32_t fbr_thread_max(const fbr_pool_t *pool)
 	return ck_pr_load_uint(&pool->thread_max);
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_callers_max(const fbr_pool_t *pool)
 {
 	if (pool == NULL || !fbr_pool_active(pool)) {
