@@ -1,3 +1,5 @@
+/* See LICENSE file for copyright and license details. */
+
 #ifndef FBR_JQ_RING_H
 #define FBR_JQ_RING_H
 
