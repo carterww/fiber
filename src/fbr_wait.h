@@ -12,7 +12,10 @@
 #include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
 #include "fbr_debug.h"
-#include "fbr_epoch.h"
+#include "fbr_hp.h"
+
+#define FBR_WAIT_HPS_PER_THREAD (1)
+#define FBR_WAIT_CONCURRENT_RECLAIMERS_MAX (2)
 
 enum fbr_wait_entry_status {
 	FBR_WAIT_ENTRY_INACTIVE = 0,
@@ -24,15 +27,15 @@ struct fbr_wait_entry {
 	enum fbr_wait_entry_status status;
 	uint32_t futex;
 	uint64_t timestamp;
-	uint64_t epoch_retired;
 };
 
 struct fbr_wait_entries {
 	struct fbr_bm_alloc_meta meta;
-	uint64_t timestamp_global;
 	struct fbr_wait_entry *array;
+	uint64_t timestamp_global;
 	uint32_t retired_approx;
-	int reclaim_flag;
+	int hp_cache_taken[FBR_WAIT_CONCURRENT_RECLAIMERS_MAX];
+	void **hp_cache[FBR_WAIT_CONCURRENT_RECLAIMERS_MAX];
 };
 
 /* = 0 -> a equals b
@@ -45,10 +48,25 @@ inline static int64_t fbr_timestamp_cmp(uint64_t a, uint64_t b)
 	return (int64_t)(a - b);
 }
 
+inline static enum fbr_wait_entry_status
+fbr_wait_entry_status_get(struct fbr_wait_entry *e)
+{
+	int istatus;
+	enum fbr_wait_entry_status status;
+
+	istatus = ck_pr_load_int((int *)&e->status);
+	status = (enum fbr_wait_entry_status)istatus;
+
+	return status;
+}
+
 inline static fbr_errno_t fbr_wait_entries_init(struct fbr_wait_entries *w,
 						uint32_t num,
+						uint32_t hp_entries,
 						void *(*malloc)(size_t))
 {
+	void **hp_cache_ptr;
+
 	fbr_assert(w != NULL);
 	fbr_assert(malloc != NULL);
 	fbr_assert(num > 0);
@@ -61,12 +79,22 @@ inline static fbr_errno_t fbr_wait_entries_init(struct fbr_wait_entries *w,
 	w->timestamp_global = 0;
 	w->array = arr;
 	w->retired_approx = 0;
-	w->reclaim_flag = 0;
+	w->hp_cache[0] = NULL;
 	for (uint32_t i = 0; i < num; ++i) {
 		w->array[i].status = FBR_WAIT_ENTRY_INACTIVE;
 		w->array[i].futex = 0;
 		w->array[i].timestamp = 0;
-		w->array[i].epoch_retired = FBR_EPOCH_GRACE;
+	}
+	hp_cache_ptr =
+		malloc(sizeof(void *) * hp_entries * FBR_WAIT_HPS_PER_THREAD *
+		       FBR_WAIT_CONCURRENT_RECLAIMERS_MAX);
+	if (hp_cache_ptr == NULL) {
+		return FBR_ENOMEM;
+	}
+	for (uint32_t i = 0; i < FBR_WAIT_CONCURRENT_RECLAIMERS_MAX; ++i) {
+		w->hp_cache[i] = hp_cache_ptr +
+				 (i * hp_entries * FBR_WAIT_HPS_PER_THREAD);
+		w->hp_cache_taken[i] = 0;
 	}
 
 	return FBR_EOK;
@@ -79,26 +107,14 @@ inline static void fbr_wait_entries_free(struct fbr_wait_entries *w,
 	fbr_assert(free != NULL);
 
 	fbr_bm_alloc_free(&w->meta, free);
-}
-
-inline static bool fbr_wait_entries_reclaim_start(struct fbr_wait_entries *w)
-{
-	int reclaim_flag_prev;
-
-	reclaim_flag_prev = ck_pr_fas_int(&w->reclaim_flag, 1);
-	return reclaim_flag_prev == 0;
-}
-
-inline static void fbr_wait_entries_reclaim_finish(struct fbr_wait_entries *w)
-{
-	int reclaim_flag_prev;
-
-	reclaim_flag_prev = ck_pr_fas_int(&w->reclaim_flag, 0);
-	fbr_assert(reclaim_flag_prev == 1);
+	if (w->hp_cache[0] != NULL) {
+		free(w->hp_cache[0]);
+	}
 }
 
 inline static fbr_errno_t fbr_wait_entry_add(struct fbr_wait_entries *w,
-					     uint32_t **futex)
+					     struct fbr_hp_entry *hp,
+					     struct fbr_wait_entry **entry_out)
 {
 	fbr_errno_t err;
 	uint32_t idx;
@@ -107,7 +123,8 @@ inline static fbr_errno_t fbr_wait_entry_add(struct fbr_wait_entries *w,
 	struct fbr_wait_entry *entry;
 
 	fbr_assert(w != NULL);
-	fbr_assert(futex != NULL);
+	fbr_assert(hp != NULL);
+	fbr_assert(entry_out != NULL);
 
 	err = fbr_bm_malloc(&w->meta, &idx);
 	if (err != FBR_EOK) {
@@ -115,101 +132,104 @@ inline static fbr_errno_t fbr_wait_entry_add(struct fbr_wait_entries *w,
 	}
 	entry = &w->array[idx];
 
+	ck_pr_store_ptr(&hp->ptrs[0], entry);
 	timestamp = ck_pr_faa_64(&w->timestamp_global, 1);
-	ck_pr_fence_atomic_store();
 	ck_pr_store_64(&entry->timestamp, timestamp);
 	ck_pr_fence_store_atomic();
 	prev_status = ck_pr_fas_int((int *)&entry->status,
 				    (int)FBR_WAIT_ENTRY_ACTIVE);
 	fbr_assert((enum fbr_wait_entry_status)prev_status ==
 		   FBR_WAIT_ENTRY_INACTIVE);
-	*futex = &entry->futex;
+	*entry_out = entry;
 
 	return FBR_EOK;
 }
 
 inline static uint32_t fbr_wait_entry_retire(struct fbr_wait_entries *w,
-					     uint64_t epoch, uint32_t idx)
+					     struct fbr_wait_entry *entry)
 {
 	int prev_status;
 	enum fbr_wait_entry_status stat;
-	struct fbr_wait_entry *entry;
 
 	fbr_assert(w != NULL);
-	fbr_assert(idx < w->meta.bm->n_bits);
+	fbr_assert(entry >= w->array);
 
-	entry = &w->array[idx];
-
-	ck_pr_store_64(&entry->epoch_retired, epoch);
-	ck_pr_fence_store_atomic();
 	prev_status = ck_pr_fas_int((int *)&entry->status,
 				    (int)FBR_WAIT_ENTRY_RETIRED);
 	stat = (enum fbr_wait_entry_status)prev_status;
 	fbr_assert(stat == FBR_WAIT_ENTRY_ACTIVE ||
 		   stat == FBR_WAIT_ENTRY_RETIRED);
 	if (stat == FBR_WAIT_ENTRY_ACTIVE) {
-		ck_pr_fence_atomic();
 		return ck_pr_faa_32(&w->retired_approx, 1) + 1;
 	} else {
-		ck_pr_fence_atomic_load();
 		return ck_pr_load_32(&w->retired_approx);
 	}
 }
 
-inline static void fbr_wait_entry_free(struct fbr_wait_entries *w, uint32_t idx)
+inline static void fbr_wait_entry_free(struct fbr_wait_entries *w,
+				       struct fbr_wait_entry *entry)
 {
-	int prev_status;
-	enum fbr_wait_entry_status stat;
-	struct fbr_wait_entry *entry;
+	uint32_t idx;
 
 	fbr_assert(w != NULL);
-	fbr_assert(idx < w->meta.bm->n_bits);
 
-	entry = &w->array[idx];
-
-	prev_status = ck_pr_fas_int((int *)&entry->status,
-				    (int)FBR_WAIT_ENTRY_INACTIVE);
-	stat = (enum fbr_wait_entry_status)prev_status;
-	fbr_assert(stat == FBR_WAIT_ENTRY_RETIRED);
-	ck_pr_fence_atomic();
-	ck_pr_dec_32(&w->retired_approx);
-	ck_pr_barrier();
-	fbr_bm_free(&w->meta, idx);
+	if (ck_pr_cas_int((int *)&entry->status, (int)FBR_WAIT_ENTRY_RETIRED,
+			  (int)FBR_WAIT_ENTRY_INACTIVE)) {
+		ck_pr_store_32(&entry->futex, 0);
+		ck_pr_fence_store_atomic();
+		ck_pr_dec_32(&w->retired_approx);
+		ck_pr_barrier();
+		idx = (uint32_t)(entry - w->array);
+		fbr_assert(idx < w->meta.bm->n_bits);
+		fbr_bm_free(&w->meta, idx);
+	}
 }
 
 inline static void fbr_wait_entries_reclaim(struct fbr_wait_entries *w,
-					    uint64_t epoch_global)
+					    struct fbr_hp_entries *hp_entries,
+					    struct fbr_hp_entry *hp)
 {
+	int reclaim_idx = -1;
+	void **hp_cache;
+	uint32_t hp_count;
 	struct fbr_bm_alloc_iterator iter;
 	uint32_t idx;
-	uint64_t epoch_thresh;
 
-	fbr_assert(w != NULL);
-
-	if (!fbr_wait_entries_reclaim_start(w)) {
+	for (int i = 0; i < FBR_WAIT_CONCURRENT_RECLAIMERS_MAX; ++i) {
+		int taken = ck_pr_fas_int(&w->hp_cache_taken[i], 1);
+		if (!taken) {
+			reclaim_idx = i;
+			break;
+		}
+	}
+	if (reclaim_idx < 0) {
 		return;
 	}
+	hp_cache = w->hp_cache[reclaim_idx];
+	hp_count = fbr_hp_gather_single(hp_entries, hp_cache);
 
-	epoch_thresh = epoch_global - FBR_EPOCH_GRACE;
 	fbr_bm_iterator_init(&w->meta, &iter);
+loop:
 	while (fbr_bm_iterator_next(&w->meta, &iter, &idx)) {
-		int istatus;
 		enum fbr_wait_entry_status status;
-		uint64_t entry_epoch;
-		struct fbr_wait_entry *wait_entry = &w->array[idx];
-		istatus = ck_pr_load_int((int *)&wait_entry->status);
-		status = (enum fbr_wait_entry_status)istatus;
+		uint64_t entry_timestamp;
+
+		struct fbr_wait_entry *entry = &w->array[idx];
+		fbr_hp_post(hp, entry, 0);
+		status = fbr_wait_entry_status_get(entry);
 		if (status != FBR_WAIT_ENTRY_RETIRED) {
 			continue;
 		}
-		entry_epoch = ck_pr_load_64(&wait_entry->epoch_retired);
-		if (fbr_epoch_cmp(epoch_thresh, entry_epoch) < 0) {
-			continue;
+		for (uint32_t i = 0; i < hp_count; ++i) {
+			if (hp_cache[i] == entry) {
+				goto loop;
+			}
 		}
-		fbr_wait_entry_free(w, idx);
+		fbr_wait_entry_free(w, entry);
 	}
-	ck_pr_barrier();
-	fbr_wait_entries_reclaim_finish(w);
+	fbr_hp_clear(hp);
+	ck_pr_store_int(&w->hp_cache_taken[reclaim_idx], 0);
+	ck_pr_fence_memory();
 }
 
 #endif /* _FBR_WAIT_H */

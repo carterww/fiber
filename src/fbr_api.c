@@ -11,6 +11,7 @@
 #include "fbr_debug.h"
 #include "fbr_epoch.h"
 #include "fbr_futex.h"
+#include "fbr_hp.h"
 #include "fbr_internal.h"
 #include "fbr_job.h"
 #include "fbr_thread.h"
@@ -30,7 +31,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	fbr_errno_t job_entry_err = FBR_EGENERIC;
 	fbr_errno_t thread_entry_err = FBR_EGENERIC;
 	fbr_errno_t waiters_err = FBR_EGENERIC;
-	fbr_errno_t wait_epoch_err = FBR_EGENERIC;
+	fbr_errno_t wait_hp_err = FBR_EGENERIC;
 	fbr_errno_t waiters_job_err = FBR_EGENERIC;
 	fbr_errno_t wait_job_epoch_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
@@ -99,21 +100,22 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	 * are overallocated.
 	 */
 	if (opt->wait_enable) {
+		uint32_t hp_entries_count = opt->thread_max + opt->callers_max;
 		waiters_err = fbr_wait_entries_init(
 			&pool->waiters,
-			fbr_epoch_buffer_len(opt->thread_max, opt->callers_max),
-			opt->allocator.malloc);
+			fbr_hp_buffer_len(opt->thread_max, opt->callers_max, 1),
+			hp_entries_count, opt->allocator.malloc);
 		if (waiters_err != FBR_EOK) {
 			res.error = waiters_err;
 			goto init_error;
 		}
 
-		/* Init wait epoch allocator. */
-		wait_epoch_err = fbr_epoch_entries_init(
-			&pool->wait_epoch, opt->thread_max + opt->callers_max,
-			opt->allocator.malloc);
-		if (wait_epoch_err != FBR_EOK) {
-			res.error = wait_epoch_err;
+		/* Init wait hp allocator. */
+		wait_hp_err = fbr_hp_entries_init(&pool->wait_hp,
+						  hp_entries_count,
+						  opt->allocator.malloc);
+		if (wait_hp_err != FBR_EOK) {
+			res.error = wait_hp_err;
 			goto init_error;
 		}
 	}
@@ -194,9 +196,9 @@ init_error: {
 		fbr_wait_job_entries_free(&pool->waiters_job,
 					  opt->allocator.free);
 	}
-	if (opt->wait_enable && wait_epoch_err == FBR_EOK) {
+	if (opt->wait_enable && wait_hp_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
-		fbr_epoch_entries_free(&pool->wait_epoch, opt->allocator.free);
+		fbr_hp_entries_free(&pool->wait_hp, opt->allocator.free);
 	}
 	if (opt->wait_enable && waiters_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
@@ -281,10 +283,10 @@ FBR_ATTR_PUBLIC
 fbr_errno_t fbr_wait(fbr_pool_t *pool)
 {
 	fbr_errno_t res = FBR_EOK;
-	fbr_errno_t epoch_malloc_err;
+	fbr_errno_t hp_malloc_err;
 	fbr_errno_t wait_entry_err;
-	struct fbr_epoch_entry *entry;
-	uint32_t *futex;
+	struct fbr_hp_entry *hp;
+	struct fbr_wait_entry *wait_entry;
 
 	if (pool == NULL) {
 		return FBR_ENULL_ARG;
@@ -298,32 +300,35 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool)
 	if (fbr_wait_can_wake(pool)) {
 		return FBR_EOK;
 	}
-	epoch_malloc_err = fbr_epoch_malloc(&pool->wait_epoch, &entry);
-	if (epoch_malloc_err != FBR_EOK) {
-		return epoch_malloc_err;
+	hp_malloc_err = fbr_hp_malloc(&pool->wait_hp, &hp);
+	if (hp_malloc_err != FBR_EOK) {
+		/* TODO: Scan retired to see if any can be reclaimed */
+		return hp_malloc_err;
 	}
-	fbr_assert(entry != NULL);
-	fbr_epoch_enter(&pool->wait_epoch, entry);
+	fbr_assert(hp != NULL);
 	ck_pr_barrier();
-	wait_entry_err = fbr_wait_entry_add(&pool->waiters, &futex);
+	wait_entry_err = fbr_wait_entry_add(&pool->waiters, hp, &wait_entry);
 	if (wait_entry_err != FBR_EOK) {
 		res = wait_entry_err;
-		goto epoch_exit;
+		goto exit;
 	}
+	fbr_assert(wait_entry != NULL);
 
 	/* Before going to sleep check condition again */
 	if (fbr_wait_can_wake(pool)) {
-		goto epoch_exit;
+		goto exit;
 	}
 
-	while (ck_pr_load_32(futex) == 0) {
-		res = fbr_futex_wait(futex, 0);
+	while (ck_pr_load_32(&wait_entry->futex) == 0) {
+		res = fbr_futex_wait(&wait_entry->futex, 0);
+		if (res == FBR_EAGAIN) {
+			res = FBR_EOK;
+			break;
+		}
 	}
 
-epoch_exit:
-	fbr_epoch_exit(&pool->wait_epoch, entry);
-	ck_pr_barrier();
-	fbr_epoch_free(&pool->wait_epoch, entry);
+exit:
+	fbr_hp_free(&pool->wait_hp, hp);
 	return res;
 }
 
@@ -390,6 +395,10 @@ fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
 
 	while (ck_pr_load_32(futex) == 0) {
 		res = fbr_futex_wait(futex, 0);
+		if (res == FBR_EAGAIN) {
+			res = FBR_EOK;
+			break;
+		}
 	}
 
 epoch_exit: {

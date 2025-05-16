@@ -10,6 +10,7 @@
 
 #include "fbr_cc.h"
 #include "fbr_epoch.h"
+#include "fbr_hp.h"
 #include "fbr_job.h"
 #include "fbr_platform.h"
 #include "fbr_thread_entries.h"
@@ -45,7 +46,7 @@ struct fbr_pool {
 	struct fbr_job_entries jobs_current;
 	struct fbr_thread_entries threads;
 	struct fbr_wait_entries waiters;
-	struct fbr_epoch_entries wait_epoch;
+	struct fbr_hp_entries wait_hp;
 	struct fbr_wait_job_entries waiters_job;
 	struct fbr_epoch_entries wait_job_epoch;
 
@@ -84,7 +85,7 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->jobs_current.array, NULL);
 	ck_pr_store_ptr(&pool->threads.array, NULL);
 	ck_pr_store_ptr(&pool->waiters.array, NULL);
-	ck_pr_store_ptr(&pool->wait_epoch.array, NULL);
+	ck_pr_store_ptr(&pool->wait_hp.array, NULL);
 	ck_pr_store_ptr(&pool->waiters_job.array, NULL);
 	ck_pr_store_ptr(&pool->wait_job_epoch.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
@@ -98,7 +99,7 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	fbr_thread_entries_free(&pool->threads, alloc_free);
 	if (pool->wait_enable) {
 		fbr_wait_entries_free(&pool->waiters, alloc_free);
-		fbr_epoch_entries_free(&pool->wait_epoch, alloc_free);
+		fbr_hp_entries_free(&pool->wait_hp, alloc_free);
 	}
 	if (pool->wait_job_enable) {
 		fbr_wait_job_entries_free(&pool->waiters_job, alloc_free);
