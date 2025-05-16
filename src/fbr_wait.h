@@ -7,11 +7,13 @@
 
 #include <ck_pr.h>
 
+#include <fbr.h>
 #include <fbr_errno.h>
 
 #include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
 #include "fbr_debug.h"
+#include "fbr_futex.h"
 #include "fbr_hp.h"
 
 #define FBR_WAIT_HPS_PER_THREAD (1)
@@ -63,21 +65,23 @@ fbr_wait_entry_status_get(struct fbr_wait_entry *e)
 inline static fbr_errno_t fbr_wait_entries_init(struct fbr_wait_entries *w,
 						uint32_t num,
 						uint32_t hp_entries,
-						void *(*malloc)(size_t))
+						struct fbr_allocator alloc)
 {
 	void **hp_cache_ptr;
 
 	fbr_assert(w != NULL);
-	fbr_assert(malloc != NULL);
 	fbr_assert(num > 0);
+	fbr_assert(hp_entries > 0);
+	fbr_assert(alloc.malloc != NULL);
+	fbr_assert(alloc.free != NULL);
 
-	struct fbr_wait_entry *arr =
-		fbr_bm_alloc_init(&w->meta, sizeof(*w->array), num, malloc);
+	struct fbr_wait_entry *arr = fbr_bm_alloc_init(
+		&w->meta, sizeof(*w->array), num, alloc.malloc);
 	if (arr == NULL) {
 		return FBR_ENOMEM;
 	}
-	w->timestamp_global = 0;
 	w->array = arr;
+	w->timestamp_global = 0;
 	w->retired_approx = 0;
 	w->hp_cache[0] = NULL;
 	for (uint32_t i = 0; i < num; ++i) {
@@ -85,10 +89,11 @@ inline static fbr_errno_t fbr_wait_entries_init(struct fbr_wait_entries *w,
 		w->array[i].futex = 0;
 		w->array[i].timestamp = 0;
 	}
-	hp_cache_ptr =
-		malloc(sizeof(void *) * hp_entries * FBR_WAIT_HPS_PER_THREAD *
-		       FBR_WAIT_CONCURRENT_RECLAIMERS_MAX);
+	hp_cache_ptr = alloc.malloc(sizeof(void *) * hp_entries *
+				    FBR_WAIT_HPS_PER_THREAD *
+				    FBR_WAIT_CONCURRENT_RECLAIMERS_MAX);
 	if (hp_cache_ptr == NULL) {
+		fbr_bm_alloc_free(&w->meta, alloc.free);
 		return FBR_ENOMEM;
 	}
 	for (uint32_t i = 0; i < FBR_WAIT_CONCURRENT_RECLAIMERS_MAX; ++i) {
@@ -105,11 +110,10 @@ inline static void fbr_wait_entries_free(struct fbr_wait_entries *w,
 {
 	fbr_assert(w != NULL);
 	fbr_assert(free != NULL);
+	fbr_assert(w->hp_cache[0] != NULL);
 
 	fbr_bm_alloc_free(&w->meta, free);
-	if (w->hp_cache[0] != NULL) {
-		free(w->hp_cache[0]);
-	}
+	free(w->hp_cache[0]);
 }
 
 inline static fbr_errno_t fbr_wait_entry_add(struct fbr_wait_entries *w,
@@ -172,6 +176,7 @@ inline static void fbr_wait_entry_free(struct fbr_wait_entries *w,
 	uint32_t idx;
 
 	fbr_assert(w != NULL);
+	fbr_assert(entry >= w->array);
 
 	if (ck_pr_cas_int((int *)&entry->status, (int)FBR_WAIT_ENTRY_RETIRED,
 			  (int)FBR_WAIT_ENTRY_INACTIVE)) {
@@ -230,6 +235,46 @@ loop:
 	fbr_hp_clear(hp);
 	ck_pr_store_int(&w->hp_cache_taken[reclaim_idx], 0);
 	ck_pr_fence_memory();
+}
+
+inline static uint32_t fbr_wait_entries_wake(struct fbr_wait_entries *w,
+					     struct fbr_hp_entry *hp,
+					     uint64_t timestamp)
+{
+	struct fbr_bm_alloc_iterator iter;
+	uint32_t idx;
+	uint32_t retired_approx;
+
+	fbr_assert(w != NULL);
+	fbr_assert(hp != NULL);
+
+	// Atomic load not necessary, nobody can change this rn
+	retired_approx = 0;
+	fbr_bm_iterator_init(&w->meta, &iter);
+	while (fbr_bm_iterator_next(&w->meta, &iter, &idx)) {
+		uint32_t nwake = 1;
+		enum fbr_wait_entry_status status;
+		uint64_t entry_timestamp;
+
+		struct fbr_wait_entry *wait_entry = &w->array[idx];
+		fbr_hp_post(hp, wait_entry, 0);
+		status = fbr_wait_entry_status_get(wait_entry);
+		if (status != FBR_WAIT_ENTRY_ACTIVE) {
+			continue;
+		}
+		entry_timestamp = ck_pr_load_64(&wait_entry->timestamp);
+		if (fbr_timestamp_cmp(entry_timestamp, timestamp) >= 0) {
+			continue;
+		}
+		(void)ck_pr_fas_32(&wait_entry->futex, 1);
+		ck_pr_barrier();
+		fbr_errno_t err = fbr_futex_wake(&wait_entry->futex, &nwake);
+		fbr_assert(err == FBR_EOK);
+		retired_approx = fbr_wait_entry_retire(w, wait_entry);
+	}
+	fbr_hp_clear(hp);
+
+	return retired_approx;
 }
 
 #endif /* _FBR_WAIT_H */

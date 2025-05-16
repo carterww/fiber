@@ -94,7 +94,6 @@ int main(void)
                          */
 			while ((error = fbr_job_push(pool, &job)) != FBR_EOK)
 				;
-			EXIT_ERR(error);
 		}
 
 		/* fiber_wait allows the caller to block until all jobs
@@ -127,16 +126,14 @@ static suseconds_t time_usec_now(void)
 static struct fbr_pool *pool_init(uint32_t tnum, uint32_t queue_length)
 {
 	fbr_init_result_t init_res;
-	fbr_init_options_t pool_options = {
-		FBR_JQ_RING_QUEUE_OPS,
-		{ malloc, free },
-		tnum,
-		queue_length,
-		threads_num[threads_num_len - 1],
-		1,
-		true,
-		false
-	};
+	fbr_init_options_t pool_options = { FBR_JQ_RING_QUEUE_OPS,
+					    { malloc, free },
+					    tnum,
+					    queue_length,
+					    threads_num[threads_num_len - 1],
+					    1,
+					    true,
+					    false };
 
 	init_res = fbr_init(&pool_options);
 	if (init_res.error != FBR_EOK) {

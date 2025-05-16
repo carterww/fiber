@@ -9,7 +9,6 @@
 #include <fbr_errno.h>
 
 #include "fbr_debug.h"
-#include "fbr_epoch.h"
 #include "fbr_futex.h"
 #include "fbr_hp.h"
 #include "fbr_internal.h"
@@ -33,7 +32,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	fbr_errno_t waiters_err = FBR_EGENERIC;
 	fbr_errno_t wait_hp_err = FBR_EGENERIC;
 	fbr_errno_t waiters_job_err = FBR_EGENERIC;
-	fbr_errno_t wait_job_epoch_err = FBR_EGENERIC;
+	fbr_errno_t wait_job_hp_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
 	uint32_t worker_num = 0;
@@ -104,7 +103,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		waiters_err = fbr_wait_entries_init(
 			&pool->waiters,
 			fbr_hp_buffer_len(opt->thread_max, opt->callers_max, 1),
-			hp_entries_count, opt->allocator.malloc);
+			hp_entries_count, opt->allocator);
 		if (waiters_err != FBR_EOK) {
 			res.error = waiters_err;
 			goto init_error;
@@ -124,22 +123,22 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	 * are overallocated.
 	 */
 	if (opt->wait_job_enable) {
+		uint32_t hp_entries_count = opt->thread_max + opt->callers_max;
 		waiters_job_err = fbr_wait_job_entries_init(
 			&pool->waiters_job,
-			fbr_epoch_buffer_len(opt->thread_max, opt->callers_max),
-			opt->allocator.malloc);
+			fbr_hp_buffer_len(opt->thread_max, opt->callers_max, 1),
+			hp_entries_count, opt->allocator);
 		if (waiters_job_err != FBR_EOK) {
 			res.error = waiters_job_err;
 			goto init_error;
 		}
 
 		/* Init wait job epoch allocator. */
-		wait_job_epoch_err = fbr_epoch_entries_init(
-			&pool->wait_job_epoch,
-			opt->thread_max + opt->callers_max,
-			opt->allocator.malloc);
-		if (wait_job_epoch_err != FBR_EOK) {
-			res.error = wait_job_epoch_err;
+		wait_job_hp_err = fbr_hp_entries_init(&pool->wait_job_hp,
+						      hp_entries_count,
+						      opt->allocator.malloc);
+		if (wait_job_hp_err != FBR_EOK) {
+			res.error = wait_job_hp_err;
 			goto init_error;
 		}
 	}
@@ -186,10 +185,9 @@ init_error: {
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
 		opt->queue_ops.free(queue_res.queue);
 	}
-	if (opt->wait_job_enable && wait_job_epoch_err == FBR_EOK) {
+	if (opt->wait_job_enable && wait_job_hp_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
-		fbr_epoch_entries_free(&pool->wait_job_epoch,
-				       opt->allocator.free);
+		fbr_hp_entries_free(&pool->wait_job_hp, opt->allocator.free);
 	}
 	if (opt->wait_job_enable && waiters_job_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
@@ -314,6 +312,7 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool)
 	}
 	fbr_assert(wait_entry != NULL);
 
+	ck_pr_barrier();
 	/* Before going to sleep check condition again */
 	if (fbr_wait_can_wake(pool)) {
 		goto exit;
@@ -335,12 +334,12 @@ exit:
 FBR_ATTR_PUBLIC
 fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
 {
+	uint32_t retired_approx = 0;
 	fbr_errno_t res = FBR_EOK;
-	fbr_errno_t epoch_malloc_err;
-	fbr_errno_t wait_entry_err;
-	struct fbr_epoch_entry *entry;
-	uint32_t *futex;
-	uint32_t idx;
+	fbr_errno_t hp_malloc_err;
+	fbr_errno_t wait_job_entry_err;
+	struct fbr_hp_entry *hp;
+	struct fbr_wait_job_entry *wait_job_entry;
 
 	if (pool == NULL) {
 		return FBR_ENULL_ARG;
@@ -367,44 +366,54 @@ fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
 	    !fbr_job_executing(&pool->jobs_current, job_id)) {
 		return FBR_EOK;
 	}
-	epoch_malloc_err = fbr_epoch_malloc(&pool->wait_job_epoch, &entry);
-	if (epoch_malloc_err != FBR_EOK) {
-		return epoch_malloc_err;
+	hp_malloc_err = fbr_hp_malloc(&pool->wait_job_hp, &hp);
+	if (hp_malloc_err != FBR_EOK) {
+		/* TODO: Scan retired to see if any can be reclaimed */
+		return hp_malloc_err;
 	}
-	fbr_assert(entry != NULL);
-	fbr_epoch_enter(&pool->wait_job_epoch, entry);
+	fbr_assert(hp != NULL);
 	ck_pr_barrier();
 
-	wait_entry_err = fbr_wait_job_entry_add(&pool->waiters_job, job_id,
-						&futex, &idx);
-	if (wait_entry_err != FBR_EOK) {
-		res = wait_entry_err;
-		goto epoch_exit;
+	wait_job_entry_err = fbr_wait_job_entry_add(&pool->waiters_job, hp,
+						    job_id, &wait_job_entry);
+	if (wait_job_entry_err != FBR_EOK) {
+		res = wait_job_entry_err;
+		goto exit;
 	}
+	fbr_assert(wait_job_entry != NULL);
 
+	ck_pr_barrier();
 	/* Before going to sleep check condition again */
 	if (!pool->job_queue_ops.job_in_queue(pool->job_queue, job_id) &&
 	    !fbr_job_executing(&pool->jobs_current, job_id)) {
 		/* Retire here because no thread will recongnize it needs to
 		 * be retired.
 		 */
-		(void)fbr_wait_job_entry_retire(&pool->waiters_job,
-						entry->epoch, idx);
-		goto epoch_exit;
+		retired_approx = fbr_wait_job_entry_retire(&pool->waiters_job,
+							   wait_job_entry);
+		goto exit;
 	}
 
-	while (ck_pr_load_32(futex) == 0) {
-		res = fbr_futex_wait(futex, 0);
+	while (ck_pr_load_32(&wait_job_entry->futex) == 0) {
+		res = fbr_futex_wait(&wait_job_entry->futex, 0);
 		if (res == FBR_EAGAIN) {
 			res = FBR_EOK;
 			break;
 		}
 	}
 
-epoch_exit: {
-	fbr_epoch_exit(&pool->wait_job_epoch, entry);
-	ck_pr_barrier();
-	fbr_epoch_free(&pool->wait_job_epoch, entry);
+exit: {
+	uint32_t thresh = MAX(
+		1,
+		fbr_hp_buffer_len(pool->thread_max, pool->callers_max, 1) / 4);
+	/* Cases are possible where no thread ever reclaims retired nodes retired
+	 * above. To prevent that, we must check here.
+	 */
+	if (retired_approx >= thresh) {
+		fbr_wait_job_entries_reclaim(&pool->waiters_job,
+					     &pool->wait_job_hp, hp);
+	}
+	fbr_hp_free(&pool->wait_job_hp, hp);
 	return res;
 }
 }

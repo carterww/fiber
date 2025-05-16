@@ -54,7 +54,9 @@ struct fbr_queue_init_result fbr_jq_ring_init(uint32_t cap,
 		goto error;
 	}
 	ck_ring_init(&queue->ck_ring, cap);
-	/* NOTE: be careful about alignment here */
+	/* NOTE: be careful about alignment here. queue_size is a multiple of 32
+	 * right now.
+	 */
 	queue->ck_ring_buffer =
 		(struct ck_ring_buffer *)((uintptr_t)queue + queue_size);
 	queue->allocator = allocator;
@@ -132,11 +134,16 @@ uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out,
 	local_entry = (struct fbr_job *)result;
 	entry_idx = (uint32_t)(local_entry - queue->jobs.array);
 	*job_out = *local_entry;
-	/* It is important that we post the job id to threads entry before
+	/* It is important that we post the job id to the job entry before
 	 * marking the entry as free. This will lead to cases where the
 	 * job id is still in the queue and being executed by a thread, but
 	 * this is ok. All we care about is knowing if the job is in the
 	 * queue OR being executed.
+	 *
+	 * Imagine we free the entry then set the job id. A thread that wants
+	 * to wait on job X may check during the time period where the job
+	 * id isn't in the queue or a job entry. This would lead to incorrect
+	 * results.
 	 */
 	fbr_job_entry_set_active(job_entry, local_entry->id);
 	ck_pr_barrier();

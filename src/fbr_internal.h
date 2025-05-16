@@ -9,7 +9,6 @@
 #include <fbr.h>
 
 #include "fbr_cc.h"
-#include "fbr_epoch.h"
 #include "fbr_hp.h"
 #include "fbr_job.h"
 #include "fbr_platform.h"
@@ -48,7 +47,7 @@ struct fbr_pool {
 	struct fbr_wait_entries waiters;
 	struct fbr_hp_entries wait_hp;
 	struct fbr_wait_job_entries waiters_job;
-	struct fbr_epoch_entries wait_job_epoch;
+	struct fbr_hp_entries wait_job_hp;
 
 	uint32_t thread_max;
 	uint32_t callers_max;
@@ -87,7 +86,7 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->waiters.array, NULL);
 	ck_pr_store_ptr(&pool->wait_hp.array, NULL);
 	ck_pr_store_ptr(&pool->waiters_job.array, NULL);
-	ck_pr_store_ptr(&pool->wait_job_epoch.array, NULL);
+	ck_pr_store_ptr(&pool->wait_job_hp.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
 	ck_pr_fence_memory();
 
@@ -103,7 +102,7 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	}
 	if (pool->wait_job_enable) {
 		fbr_wait_job_entries_free(&pool->waiters_job, alloc_free);
-		fbr_epoch_entries_free(&pool->wait_job_epoch, alloc_free);
+		fbr_hp_entries_free(&pool->wait_job_hp, alloc_free);
 	}
 
 	ck_pr_fas_32(&pool->free_futex, 1);

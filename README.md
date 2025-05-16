@@ -26,7 +26,6 @@ before I do that.
 
 ## TODOS
 A list of things that must be completed before 1.0.0.
-- Switch from EBR to HP for wait and wait_job entries.
 - Verify all atomic ops and fences to ensure race conditions are not present.
 - Write documentation for public API.
 - Write tests for every API function. These should test fault handling, improper arguments, and the

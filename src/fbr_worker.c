@@ -5,10 +5,8 @@
 #include <fbr.h>
 #include <fbr_errno.h>
 
-#include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
 #include "fbr_debug.h"
-#include "fbr_epoch.h"
 #include "fbr_futex.h"
 #include "fbr_hp.h"
 #include "fbr_internal.h"
@@ -29,11 +27,6 @@ static void fbr_worker_cleanup(void *thread_entry_ptr);
 
 static enum fbr_trysleep_queue_wakeup_reason
 fbr_worker_trysleep_on_queue(struct fbr_pool *pool);
-
-static void fbr_check_and_handle_waiters(struct fbr_pool *pool,
-					 struct fbr_hp_entry *hp,
-					 uint64_t timestamp,
-					 uint32_t retired_threshhold);
 
 inline static bool fbr_waiters_can_wake_in_loop(const struct fbr_pool *pool,
 						uint64_t *timestamp)
@@ -77,6 +70,46 @@ inline static bool fbr_waiters_can_wake_on_exit(const struct fbr_pool *pool,
 		}
 		*timestamp = tb;
 		return tnum == 0;
+	}
+}
+
+inline static void fbr_waiters_wake_in_loop(struct fbr_pool *pool,
+					    struct fbr_hp_entry *hp,
+					    uint32_t retired_thresh)
+{
+	uint64_t timestamp;
+	uint32_t retired_approx;
+
+	bool can_wake = fbr_waiters_can_wake_in_loop(pool, &timestamp);
+	if (!can_wake) {
+		return;
+	}
+	retired_approx = fbr_wait_entries_wake(&pool->waiters, hp, timestamp);
+	if (retired_approx >= retired_thresh) {
+		fbr_wait_entries_reclaim(&pool->waiters, &pool->wait_hp, hp);
+	}
+}
+
+inline static void fbr_waiters_wake_on_exit(struct fbr_pool *pool,
+					    struct fbr_hp_entry *hp,
+					    uint64_t timestamp)
+{
+	(void)fbr_wait_entries_wake(&pool->waiters, hp, timestamp);
+	fbr_wait_entries_reclaim(&pool->waiters, &pool->wait_hp, hp);
+}
+
+inline static void fbr_waiters_job_wake(struct fbr_pool *pool,
+					struct fbr_hp_entry *hp,
+					uint64_t job_id,
+					uint32_t retired_thresh)
+{
+	uint32_t retired_approx;
+
+	retired_approx =
+		fbr_wait_job_entries_wake(&pool->waiters_job, hp, job_id);
+	if (retired_approx >= retired_thresh) {
+		fbr_wait_job_entries_reclaim(&pool->waiters_job,
+					     &pool->wait_job_hp, hp);
 	}
 }
 
@@ -160,7 +193,7 @@ void fbr_worker_runner_loop(struct fbr_pool *pool)
 {
 	struct fbr_job_entry *job_current;
 	struct fbr_hp_entry *wait_hp = NULL;
-	struct fbr_epoch_entry *wait_job_entry = NULL;
+	struct fbr_hp_entry *wait_job_hp = NULL;
 	struct fbr_job buff;
 	uint32_t waiters_retired_threshhold;
 	uint32_t pop_num;
@@ -180,10 +213,10 @@ void fbr_worker_runner_loop(struct fbr_pool *pool)
 	}
 
 	if (wait_job_enable) {
-		fbr_errno_t wait_job_epoch_err = fbr_epoch_malloc(
-			&pool->wait_job_epoch, &wait_job_entry);
-		fbr_assert(wait_job_epoch_err == FBR_EOK);
-		fbr_assert(wait_job_entry != NULL);
+		fbr_errno_t wait_job_hp_err =
+			fbr_hp_malloc(&pool->wait_job_hp, &wait_job_hp);
+		fbr_assert(wait_job_hp_err == FBR_EOK);
+		fbr_assert(wait_job_hp != NULL);
 	}
 
 	waiters_retired_threshhold = MAX(
@@ -194,17 +227,12 @@ loop:
 		pop_num = pool->job_queue_ops.pop(pool->job_queue, &buff,
 						  job_current);
 		if (pop_num == 0) {
-			uint64_t timestamp;
 			fbr_assert(ck_pr_load_int(&job_current->active) == 0);
 			/* Before possibly going to sleep check if there are any waiters */
 			if (wait_enable) {
-				bool can_wake = fbr_waiters_can_wake_in_loop(
-					pool, &timestamp);
-				if (can_wake) {
-					fbr_check_and_handle_waiters(
-						pool, wait_hp, timestamp,
-						waiters_retired_threshhold);
-				}
+				fbr_waiters_wake_in_loop(
+					pool, wait_hp,
+					waiters_retired_threshhold);
 			}
 			switch (fbr_worker_trysleep_on_queue(pool)) {
 			case FBR_TRYSLEEP_QUEUE_WAKE_JOB_AVAILABLE:
@@ -228,27 +256,9 @@ loop:
 			(void)buff.cb(buff.cb_arg);
 			ck_pr_barrier();
 			if (wait_job_enable) {
-				fbr_epoch_enter(&pool->wait_job_epoch,
-						wait_job_entry);
-				ck_pr_barrier();
-				uint32_t retired_approx =
-					fbr_wait_job_entries_wake(
-						&pool->waiters_job,
-						&pool->wait_job_epoch,
-						wait_job_entry, buff.id);
-				ck_pr_barrier();
-				fbr_epoch_exit(&pool->wait_job_epoch,
-					       wait_job_entry);
-				ck_pr_barrier();
-				if (retired_approx >=
-				    waiters_retired_threshhold) {
-					uint64_t epoch_global = ck_pr_load_64(
-						&pool->wait_job_epoch
-							 .epoch_global);
-					fbr_wait_job_entries_reclaim(
-						&pool->waiters_job,
-						epoch_global);
-				}
+				fbr_waiters_job_wake(
+					pool, wait_job_hp, buff.id,
+					waiters_retired_threshhold);
 			}
 
 			if (!fbr_pool_active(pool)) {
@@ -310,10 +320,10 @@ exit: {
 		fbr_assert(wait_hp == NULL);
 	}
 	if (wait_job_enable) {
-		fbr_assert(wait_job_entry != NULL);
-		fbr_epoch_free(&pool->wait_job_epoch, wait_job_entry);
+		fbr_assert(wait_job_hp != NULL);
+		fbr_hp_free(&pool->wait_job_hp, wait_job_hp);
 	} else {
-		fbr_assert(wait_job_entry == NULL);
+		fbr_assert(wait_job_hp == NULL);
 	}
 }
 }
@@ -343,9 +353,10 @@ static void fbr_worker_cleanup(void *thread_entry_ptr)
 		if (can_wake) {
 			struct fbr_hp_entry *hp;
 			fbr_errno_t hp_malloc_err;
+
 			hp_malloc_err = fbr_hp_malloc(&pool->wait_hp, &hp);
 			fbr_assert(hp_malloc_err == FBR_EOK);
-			fbr_check_and_handle_waiters(pool, hp, timestamp, 1);
+			fbr_waiters_wake_on_exit(pool, hp, timestamp);
 			fbr_hp_free(&pool->wait_hp, hp);
 		}
 	}
@@ -397,49 +408,4 @@ fbr_worker_trysleep_on_queue(struct fbr_pool *pool)
 		}
 	}
 	fbr_unreachable();
-}
-
-static void fbr_check_and_handle_waiters(struct fbr_pool *pool,
-					 struct fbr_hp_entry *hp,
-					 uint64_t timestamp,
-					 uint32_t retired_threshhold)
-{
-	struct fbr_bm_alloc_iterator iter;
-	uint32_t idx;
-	uint32_t retired_approx;
-
-	fbr_assert(pool != NULL);
-	fbr_assert(hp != NULL);
-
-	// Atomic load not necessary, nobody can change this rn
-	retired_approx = 0;
-	fbr_bm_iterator_init(&pool->waiters.meta, &iter);
-	while (fbr_bm_iterator_next(&pool->waiters.meta, &iter, &idx)) {
-		uint32_t nwake = 1;
-		enum fbr_wait_entry_status status;
-		uint64_t entry_timestamp;
-
-		struct fbr_wait_entry *wait_entry = &pool->waiters.array[idx];
-		fbr_hp_post(hp, wait_entry, 0);
-		status = fbr_wait_entry_status_get(wait_entry);
-		if (status != FBR_WAIT_ENTRY_ACTIVE) {
-			continue;
-		}
-		entry_timestamp = ck_pr_load_64(&wait_entry->timestamp);
-		if (fbr_timestamp_cmp(entry_timestamp, timestamp) >= 0) {
-			continue;
-		}
-		(void)ck_pr_fas_32(&wait_entry->futex, 1);
-		ck_pr_barrier();
-		fbr_errno_t err = fbr_futex_wake(&wait_entry->futex, &nwake);
-		fbr_assert(err == FBR_EOK);
-		retired_approx =
-			fbr_wait_entry_retire(&pool->waiters, wait_entry);
-	}
-	fbr_hp_clear(hp);
-
-	/* Try to free some retired nodes */
-	if (retired_approx >= retired_threshhold) {
-		fbr_wait_entries_reclaim(&pool->waiters, &pool->wait_hp, hp);
-	}
 }
