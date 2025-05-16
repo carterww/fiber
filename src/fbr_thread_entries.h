@@ -34,6 +34,8 @@ struct fbr_thread {
 		struct fbr_thread_internal internal;
 		struct fbr_thread_external external;
 	} thread;
+	struct fbr_pool *pool;
+	unsigned int thread_idx;
 };
 
 struct fbr_thread_entries {

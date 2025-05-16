@@ -24,7 +24,7 @@ enum fbr_trysleep_queue_wakeup_reason {
 	FBR_TRYSLEEP_QUEUE_WAKE_POOL_INACTIVE,
 };
 
-static void fbr_worker_cleanup(void *tls_ptr);
+static void fbr_worker_cleanup(void *thread_entry_ptr);
 
 static enum fbr_trysleep_queue_wakeup_reason
 fbr_worker_trysleep_on_queue(struct fbr_pool *pool);
@@ -86,7 +86,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	uint32_t thread_idx;
 	bool thread_entry_found;
 	fbr_errno_t err_setup;
-	struct fbr_worker_tls *tls;
 	struct fbr_thread *entries;
 	struct fbr_thread *entry;
 
@@ -111,27 +110,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	while (ck_pr_load_int(&entry->started) == 0)
 		;
 
-	/* I'd rather put this on the stack but that may lead to undefined behavior
-	 * because it is the param of a fbr_thread_cleanup_pop function
-	 */
-	tls = pool->alloc.malloc(sizeof(*tls));
-	if (tls == NULL) {
-		struct fbr_worker_tls tls_stack = {
-			pool,	       FBR_THREAD_TYPE_INTERNAL,
-			{ thread_id }, thread_idx,
-			true,
-		};
-		fbr_worker_cleanup(&tls_stack);
-		fbr_thread_exit(NULL);
-		return NULL;
-	}
-	tls->pool = pool;
-	tls->thread_type = FBR_THREAD_TYPE_INTERNAL;
-	tls->tid.thread_id_int = thread_id;
-	tls->thread_idx = thread_idx;
-	tls->on_stack = false;
-
-	fbr_thread_cleanup_push(fbr_worker_cleanup, tls);
+	fbr_thread_cleanup_push(fbr_worker_cleanup, entry);
 	err_setup = fbr_thread_cancel_type_set(FBR_THREAD_CANCEL_DEFERRED);
 	fbr_assert(err_setup == FBR_EOK);
 	err_setup = fbr_thread_cancel_enable();
@@ -152,7 +131,6 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 	uint32_t thread_idx;
 	fbr_errno_t te_malloc_err;
 	struct fbr_thread *thread_entry;
-	struct fbr_worker_tls tls;
 
 	fbr_assert(pool != NULL);
 	fbr_assert(pool->threads.array != NULL);
@@ -164,18 +142,16 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 	}
 	fbr_assert(te_malloc_err == FBR_EOK);
 	thread_entry = &pool->threads.array[thread_idx];
-
+	thread_entry->started = 1;
+	thread_entry->pool = pool;
+	thread_entry->thread_idx = thread_idx;
 	ck_pr_store_64(&thread_entry->thread.external.id, thread_id);
 	ck_pr_fence_store_atomic();
-	(void)ck_pr_fas_int(&thread_entry->started, 1);
 	ck_pr_inc_uint(&pool->thread_num);
 
 	fbr_worker_runner_loop(pool);
 
-	tls = (struct fbr_worker_tls){
-		pool, FBR_THREAD_TYPE_EXTERNAL, { thread_id }, thread_idx, true
-	};
-	fbr_worker_cleanup(&tls);
+	fbr_worker_cleanup(&thread_entry);
 	return FBR_EOK;
 }
 
@@ -339,29 +315,22 @@ exit: {
 }
 }
 
-static void fbr_worker_cleanup(void *tls_ptr)
+static void fbr_worker_cleanup(void *thread_entry_ptr)
 {
-	struct fbr_worker_tls *tls = (struct fbr_worker_tls *)tls_ptr;
+	struct fbr_thread *thread_entry = (struct fbr_thread *)thread_entry_ptr;
 	bool last_alive;
 	int active;
 
-	fbr_assert(tls != NULL);
-	struct fbr_pool *pool = tls->pool;
+	fbr_assert(thread_entry != NULL);
+	struct fbr_pool *pool = thread_entry->pool;
 	fbr_assert(pool != NULL);
 
-	fbr_thread_entry_free(&pool->threads, tls->thread_idx);
+	fbr_thread_entry_free(&pool->threads, thread_entry->thread_idx);
 	ck_pr_fence_atomic();
 	last_alive = ck_pr_dec_uint_is_zero(&pool->thread_num);
 	ck_pr_fence_atomic_load();
 	active = ck_pr_load_int(&pool->active);
 
-	/* Pool is possibly going to be freed so don't use these. */
-	tls->pool = NULL;
-	tls->thread_idx = UINT_MAX;
-
-	if (!tls->on_stack) {
-		pool->alloc.free(tls);
-	}
 	/* If last thread wake up anyone waiting on pool before exitting */
 	if (last_alive) {
 		uint64_t timestamp;

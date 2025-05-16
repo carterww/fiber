@@ -150,7 +150,6 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	pool->job_queue = queue_res.queue;
 
 	/* Start threads */
-	ck_pr_fence_memory(); // Make sure workers will see correct data
 	worker_create_errno =
 		fbr_worker_create(pool, opt->thread_num, &worker_num);
 	if (worker_create_errno != FBR_EOK || opt->thread_num != worker_num) {
@@ -520,6 +519,9 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		fbr_assert(err == FBR_EOK);
 
 		thread_entry = &pool->threads.array[idx];
+		thread_entry->pool = pool;
+		thread_entry->thread_idx = idx;
+		ck_pr_fence_memory();
 		err = fbr_thread_create(&thread_entry->thread.internal.id,
 					fbr_worker_runner_internal,
 					(void *)pool);
