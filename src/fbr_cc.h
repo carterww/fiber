@@ -36,8 +36,13 @@
 #define FBR_ATTR_WEAK __attribute__((weak))
 #define FBR_ATTR_PUBLIC __attribute__((visibility("default")))
 #define FBR_ATTR_PRIVATE __attribute__((visibility("hidden")))
+
+#if defined(FBR_CC_CLANG)
 #define FBR_ATTR_NO_SANITIZE_OVERFLOW \
 	__attribute__((no_sanitize("unsigned-integer-overflow")))
+#else
+#define FBR_ATTR_NO_SANITIZE_OVERFLOW
+#endif
 
 #endif /* gcc or clang */
 

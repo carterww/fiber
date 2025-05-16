@@ -23,10 +23,9 @@ struct fbr_bm_alloc_iterator {
 };
 
 /* I'm not forking ck to implement one silly function */
-CK_CC_INLINE static bool
-ck_bitmap_next_unset(const struct ck_bitmap *bitmap,
-		     struct ck_bitmap_iterator *i,
-		     unsigned int *bit)
+CK_CC_INLINE static bool ck_bitmap_next_unset(const struct ck_bitmap *bitmap,
+					      struct ck_bitmap_iterator *i,
+					      unsigned int *bit)
 {
 	unsigned int cache = i->cache;
 	unsigned int n_block = i->n_block;
@@ -48,7 +47,8 @@ ck_bitmap_next_unset(const struct ck_bitmap *bitmap,
 	}
 
 not_max:
-	*bit = CK_BITMAP_BLOCK * n_block + (unsigned int)ck_cc_ctz(~cache);
+	*bit = (unsigned int)CK_BITMAP_BLOCK * n_block +
+	       (unsigned int)ck_cc_ctz(~cache);
 	i->cache = cache | (cache + 1);
 	i->n_block = n_block;
 	return true;

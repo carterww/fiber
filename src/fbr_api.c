@@ -71,6 +71,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	pool->thread_max = opt->thread_max;
 	pool->callers_max = opt->callers_max;
 	pool->alloc = opt->allocator;
+	pool->free_futex = 0;
 	pool->wait_enable = opt->wait_enable;
 	pool->wait_job_enable = opt->wait_job_enable;
 
@@ -169,9 +170,15 @@ init_error: {
 	 */
 	if (worker_num > 0) {
 		uint32_t to_wake = worker_num;
+		fbr_errno_t wait_err = FBR_EOK;
 		fbr_errno_t wake_err = fbr_futex_wake(
 			&pool->tw_ql.items.queue_length, &to_wake);
 		fbr_assert(wake_err == FBR_EOK);
+		while (ck_pr_load_32(&pool->free_futex) == 0) {
+			wait_err = fbr_futex_wait(&pool->free_futex, 0);
+		}
+		fbr_assert(wait_err == FBR_EOK);
+		opt->allocator.free(pool);
 		return res;
 	}
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
@@ -226,12 +233,18 @@ void fbr_free(fbr_pool_t *pool)
 	ck_pr_fence_atomic_load();
 	thread_num = ck_pr_load_uint(&pool->thread_num);
 	if (thread_num > 0) {
+		thread_num = INT_MAX;
 		fbr_futex_wake(&pool->tw_ql.items.queue_length, &thread_num);
-		return;
+		fbr_errno_t wait_err = FBR_EOK;
+		while (ck_pr_load_32(&pool->free_futex) == 0) {
+			wait_err = fbr_futex_wait(&pool->free_futex, 0);
+		}
+		fbr_assert(wait_err == FBR_EOK);
 	} else {
 		/* Cleanup here if no threads in pool */
 		fbr_free_sync(pool);
 	}
+	pool->alloc.free(pool);
 }
 
 FBR_ATTR_PUBLIC

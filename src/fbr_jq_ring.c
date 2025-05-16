@@ -107,8 +107,8 @@ uint32_t fbr_jq_ring_push(void *vqueue, const struct fbr_job *job)
 		return 0;
 	}
 	ck_pr_store_64(&local_entry->id, job->id);
-	ck_pr_store_ptr((void **)&local_entry->cb, (void *)job->cb);
-	ck_pr_store_ptr(&local_entry->cb_arg, job->cb_arg);
+	local_entry->cb = job->cb;
+	local_entry->cb_arg = job->cb_arg;
 	ck_pr_fence_memory();
 	return 1;
 }

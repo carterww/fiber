@@ -3,6 +3,7 @@
 #ifndef _FBR_INTERNAL_H
 #define _FBR_INTERNAL_H
 
+#include "fbr_futex.h"
 #include <limits.h>
 
 #include <fbr.h>
@@ -51,6 +52,7 @@ struct fbr_pool {
 	uint32_t thread_max;
 	uint32_t callers_max;
 	struct fbr_allocator alloc;
+	uint32_t free_futex;
 	bool wait_enable;
 	bool wait_job_enable;
 };
@@ -86,7 +88,6 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->waiters_job.array, NULL);
 	ck_pr_store_ptr(&pool->wait_job_epoch.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
-	ck_pr_store_ptr(&pool->alloc.free, NULL);
 	ck_pr_fence_memory();
 
 	/* Free job queue */
@@ -104,8 +105,10 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 		fbr_epoch_entries_free(&pool->wait_job_epoch, alloc_free);
 	}
 
-	/* Free the pool */
-	alloc_free(pool);
+	ck_pr_fas_32(&pool->free_futex, 1);
+	ck_pr_barrier();
+	uint32_t wake_num = INT_MAX;
+	fbr_futex_wake(&pool->free_futex, &wake_num);
 }
 
 inline static bool fbr_pool_active(const struct fbr_pool *pool)
