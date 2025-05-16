@@ -29,6 +29,12 @@ struct fbr_job {
 };
 typedef struct fbr_job fbr_job_t;
 
+struct fbr_job_entry {
+	int active;
+	uint64_t job_id;
+};
+typedef struct fbr_job_entry fbr_job_entry_t;
+
 struct fbr_queue_init_result {
 	enum fbr_errno error;
 	void *queue;
@@ -36,7 +42,7 @@ struct fbr_queue_init_result {
 
 struct fbr_queue_ops {
 	uint32_t (*push)(void *, const struct fbr_job *);
-	uint32_t (*pop)(void *, struct fbr_job *);
+	uint32_t (*pop)(void *, struct fbr_job *, struct fbr_job_entry *);
 	struct fbr_queue_init_result (*init)(uint32_t, struct fbr_allocator);
 	void (*free)(void *);
 	bool (*job_in_queue)(void *, uint64_t);
@@ -50,6 +56,8 @@ struct fbr_init_options {
 	uint32_t queue_len;
 	uint32_t thread_max;
 	uint32_t callers_max;
+	bool wait_enable;
+	bool wait_job_enable;
 };
 typedef struct fbr_init_options fbr_init_options_t;
 

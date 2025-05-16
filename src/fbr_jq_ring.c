@@ -7,19 +7,20 @@
 #include <fbr_errno.h>
 
 #include "fbr_bm_alloc.h"
+#include "fbr_job.h"
 #include "fbr_platform.h"
 
 #define CAST_QUEUE_PTR(vqueue, queue) \
 	struct fbr_jq_ring *queue = (struct fbr_jq_ring *)vqueue
 
-struct fbr_job_entries {
+struct fbr_jq_entries {
 	struct fbr_bm_alloc_meta meta;
 	struct fbr_job *array;
 };
 
 struct fbr_jq_ring {
-	struct fbr_job_entries jobs;
-	char pad[FBR_CACHELINE_BYTES - sizeof(struct fbr_job_entries)];
+	struct fbr_jq_entries jobs;
+	char pad[FBR_CACHELINE_BYTES - sizeof(struct fbr_jq_entries)];
 	struct ck_ring ck_ring;
 	struct ck_ring_buffer *ck_ring_buffer;
 	struct fbr_allocator allocator;
@@ -83,8 +84,7 @@ void fbr_jq_ring_free(void *vqueue)
 	queue->allocator.free(queue);
 }
 
-uint32_t fbr_jq_ring_push(void *vqueue,
-			  const struct fbr_job *job)
+uint32_t fbr_jq_ring_push(void *vqueue, const struct fbr_job *job)
 {
 	fbr_assert(vqueue != NULL);
 	fbr_assert(job != NULL);
@@ -100,7 +100,8 @@ uint32_t fbr_jq_ring_push(void *vqueue,
 	}
 	local_entry = &queue->jobs.array[entry_idx];
 
-	bool success = ck_ring_enqueue_mpmc(&queue->ck_ring, queue->ck_ring_buffer, local_entry);
+	bool success = ck_ring_enqueue_mpmc(&queue->ck_ring,
+					    queue->ck_ring_buffer, local_entry);
 	if (!success) {
 		fbr_bm_free(&queue->jobs.meta, entry_idx);
 		return 0;
@@ -112,7 +113,8 @@ uint32_t fbr_jq_ring_push(void *vqueue,
 	return 1;
 }
 
-uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out)
+uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out,
+			 struct fbr_job_entry *job_entry)
 {
 	fbr_assert(vqueue != NULL);
 	fbr_assert(job_out != NULL);
@@ -121,13 +123,22 @@ uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out)
 	struct fbr_job *local_entry;
 	uint32_t entry_idx;
 
-	bool success = ck_ring_dequeue_mpmc(&queue->ck_ring, queue->ck_ring_buffer, &result);
+	bool success = ck_ring_dequeue_mpmc(&queue->ck_ring,
+					    queue->ck_ring_buffer, &result);
 	if (!success) {
+		fbr_job_entry_set_inactive(job_entry);
 		return 0;
 	}
 	local_entry = (struct fbr_job *)result;
 	entry_idx = (uint32_t)(local_entry - queue->jobs.array);
 	*job_out = *local_entry;
+	/* It is important that we post the job id to threads entry before
+	 * marking the entry as free. This will lead to cases where the
+	 * job id is still in the queue and being executed by a thread, but
+	 * this is ok. All we care about is knowing if the job is in the
+	 * queue OR being executed.
+	 */
+	fbr_job_entry_set_active(job_entry, local_entry->id);
 	ck_pr_barrier();
 	fbr_bm_free(&queue->jobs.meta, entry_idx);
 	return 1;
@@ -135,7 +146,15 @@ uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out)
 
 bool fbr_jq_ring_job_in_queue(void *vqueue, uint64_t job_id)
 {
-	(void)vqueue;
-	(void)job_id;
+	fbr_assert(vqueue != NULL);
+	CAST_QUEUE_PTR(vqueue, queue);
+	uint32_t idx;
+	struct fbr_bm_alloc_iterator iter;
+	fbr_bm_iterator_init(&queue->jobs.meta, &iter);
+	while (fbr_bm_iterator_next(&queue->jobs.meta, &iter, &idx)) {
+		if (queue->jobs.array[idx].id == job_id) {
+			return true;
+		}
+	}
 	return false;
 }

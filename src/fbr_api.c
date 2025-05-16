@@ -1,6 +1,5 @@
 /* See LICENSE file for copyright and license details. */
 
-#include "fbr_job.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -13,9 +12,11 @@
 #include "fbr_epoch.h"
 #include "fbr_futex.h"
 #include "fbr_internal.h"
+#include "fbr_job.h"
 #include "fbr_thread.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
+#include "fbr_wait_job.h"
 #include "fbr_worker.h"
 
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
@@ -30,6 +31,8 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	fbr_errno_t thread_entry_err = FBR_EGENERIC;
 	fbr_errno_t waiters_err = FBR_EGENERIC;
 	fbr_errno_t wait_epoch_err = FBR_EGENERIC;
+	fbr_errno_t waiters_job_err = FBR_EGENERIC;
+	fbr_errno_t wait_job_epoch_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
 	uint32_t worker_num = 0;
@@ -68,13 +71,16 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	pool->thread_max = opt->thread_max;
 	pool->callers_max = opt->callers_max;
 	pool->alloc = opt->allocator;
+	pool->wait_enable = opt->wait_enable;
+	pool->wait_job_enable = opt->wait_job_enable;
 
 	/* Initialization after this point must goto init_error in order to cleanup
 	 * resources.
 	 */
 
 	/* Init current job list allocator */
-	job_entry_err = fbr_job_entries_init(&pool->jobs_current, opt->thread_max, opt->allocator.malloc);
+	job_entry_err = fbr_job_entries_init(
+		&pool->jobs_current, opt->thread_max, opt->allocator.malloc);
 	if (job_entry_err != FBR_EOK) {
 		res.error = job_entry_err;
 		goto init_error;
@@ -91,22 +97,48 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	/* Init waiters allocator. These cannot be reclaimed instantly so they
 	 * are overallocated.
 	 */
-	waiters_err = fbr_wait_entries_init(
-		&pool->waiters,
-		opt->callers_max * FBR_EPOCH_TRY_ADVANCE_NTH * 2,
-		opt->allocator.malloc);
-	if (waiters_err != FBR_EOK) {
-		res.error = waiters_err;
-		goto init_error;
+	if (opt->wait_enable) {
+		waiters_err = fbr_wait_entries_init(
+			&pool->waiters,
+			fbr_epoch_buffer_len(opt->thread_max, opt->callers_max),
+			opt->allocator.malloc);
+		if (waiters_err != FBR_EOK) {
+			res.error = waiters_err;
+			goto init_error;
+		}
+
+		/* Init wait epoch allocator. */
+		wait_epoch_err = fbr_epoch_entries_init(
+			&pool->wait_epoch, opt->thread_max + opt->callers_max,
+			opt->allocator.malloc);
+		if (wait_epoch_err != FBR_EOK) {
+			res.error = wait_epoch_err;
+			goto init_error;
+		}
 	}
 
-	/* Init wait epoch allocator. */
-	wait_epoch_err = fbr_epoch_entries_init(
-		&pool->wait_epoch, opt->thread_max + opt->callers_max,
-		opt->allocator.malloc);
-	if (wait_epoch_err != FBR_EOK) {
-		res.error = wait_epoch_err;
-		goto init_error;
+	/* Init job waiters allocator. These cannot be reclaimed instantly so they
+	 * are overallocated.
+	 */
+	if (opt->wait_job_enable) {
+		waiters_job_err = fbr_wait_job_entries_init(
+			&pool->waiters_job,
+			fbr_epoch_buffer_len(opt->thread_max, opt->callers_max),
+			opt->allocator.malloc);
+		if (waiters_job_err != FBR_EOK) {
+			res.error = waiters_job_err;
+			goto init_error;
+		}
+
+		/* Init wait job epoch allocator. */
+		wait_job_epoch_err = fbr_epoch_entries_init(
+			&pool->wait_job_epoch,
+			opt->thread_max + opt->callers_max,
+			opt->allocator.malloc);
+		if (wait_job_epoch_err != FBR_EOK) {
+			res.error = wait_job_epoch_err;
+			goto init_error;
+		}
 	}
 
 	/* Initialize job queue */
@@ -146,11 +178,21 @@ init_error: {
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
 		opt->queue_ops.free(queue_res.queue);
 	}
-	if (wait_epoch_err == FBR_EOK) {
+	if (opt->wait_job_enable && wait_job_epoch_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_epoch_entries_free(&pool->wait_job_epoch,
+				       opt->allocator.free);
+	}
+	if (opt->wait_job_enable && waiters_job_err == FBR_EOK) {
+		fbr_assert(pool != NULL);
+		fbr_wait_job_entries_free(&pool->waiters_job,
+					  opt->allocator.free);
+	}
+	if (opt->wait_enable && wait_epoch_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
 		fbr_epoch_entries_free(&pool->wait_epoch, opt->allocator.free);
 	}
-	if (waiters_err == FBR_EOK) {
+	if (opt->wait_enable && waiters_err == FBR_EOK) {
 		fbr_assert(pool != NULL);
 		fbr_wait_entries_free(&pool->waiters, opt->allocator.free);
 	}
@@ -235,6 +277,9 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool)
 	if (pool == NULL) {
 		return FBR_ENULL_ARG;
 	}
+	if (!pool->wait_enable) {
+		return FBR_ENOTSUP;
+	}
 	if (!fbr_pool_active(pool)) {
 		return FBR_EINVAL;
 	}
@@ -270,7 +315,78 @@ epoch_exit:
 	return res;
 }
 
-fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id);
+FBR_ATTR_PUBLIC
+fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
+{
+	fbr_errno_t res = FBR_EOK;
+	fbr_errno_t epoch_malloc_err;
+	fbr_errno_t wait_entry_err;
+	struct fbr_epoch_entry *entry;
+	uint32_t *futex;
+	uint32_t idx;
+
+	if (pool == NULL) {
+		return FBR_ENULL_ARG;
+	}
+	if (!pool->wait_job_enable) {
+		return FBR_ENOTSUP;
+	}
+	if (!fbr_pool_active(pool)) {
+		return FBR_EINVAL;
+	}
+	/* The order in which we check conditions is very important. Jobs
+	 * move from the queue to be executed so we must check the queue
+	 * for the job before checking the current jobs.
+	 *
+	 * An important note is that this system is built for correctness,
+	 * not necessarily accuracy. For example, a job id can be in the
+	 * queue and currently exeucting according to these functions to
+	 * prevent the case where the job id is in neither after it has
+	 * been popped from the queue.
+	 */
+
+	/* Check condition before posting intent to wait */
+	if (!pool->job_queue_ops.job_in_queue(pool->job_queue, job_id) &&
+	    !fbr_job_executing(&pool->jobs_current, job_id)) {
+		return FBR_EOK;
+	}
+	epoch_malloc_err = fbr_epoch_malloc(&pool->wait_job_epoch, &entry);
+	if (epoch_malloc_err != FBR_EOK) {
+		return epoch_malloc_err;
+	}
+	fbr_assert(entry != NULL);
+	fbr_epoch_enter(&pool->wait_job_epoch, entry);
+	ck_pr_barrier();
+
+	wait_entry_err = fbr_wait_job_entry_add(&pool->waiters_job, job_id,
+						&futex, &idx);
+	if (wait_entry_err != FBR_EOK) {
+		res = wait_entry_err;
+		goto epoch_exit;
+	}
+
+	/* Before going to sleep check condition again */
+	if (!pool->job_queue_ops.job_in_queue(pool->job_queue, job_id) &&
+	    !fbr_job_executing(&pool->jobs_current, job_id)) {
+		/* Retire here because no thread will recongnize it needs to
+		 * be retired.
+		 */
+		(void)fbr_wait_job_entry_retire(&pool->waiters_job,
+						entry->epoch, idx);
+		goto epoch_exit;
+	}
+
+	while (ck_pr_load_32(futex) == 0) {
+		res = fbr_futex_wait(futex, 0);
+	}
+
+epoch_exit: {
+	fbr_epoch_exit(&pool->wait_job_epoch, entry);
+	ck_pr_barrier();
+	fbr_epoch_free(&pool->wait_job_epoch, entry);
+	return res;
+}
+}
 
 FBR_ATTR_PUBLIC
 fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)

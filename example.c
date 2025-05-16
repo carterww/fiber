@@ -134,6 +134,8 @@ static struct fbr_pool *pool_init(uint32_t tnum, uint32_t queue_length)
 		queue_length,
 		threads_num[threads_num_len - 1],
 		1,
+		true,
+		false
 	};
 
 	init_res = fbr_init(&pool_options);

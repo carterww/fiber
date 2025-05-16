@@ -20,6 +20,7 @@ enum fbr_errno {
 	FBR_ETHRD_LIMIT,
 	FBR_ENO_ALLOC,
 	FBR_EQUEUE_PUSH,
+	FBR_ENOTSUP,
 
 	FBR_EOK = 0,
 };

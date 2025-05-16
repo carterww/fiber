@@ -13,6 +13,7 @@
 #include "fbr_platform.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
+#include "fbr_wait_job.h"
 
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
@@ -44,10 +45,14 @@ struct fbr_pool {
 	struct fbr_thread_entries threads;
 	struct fbr_wait_entries waiters;
 	struct fbr_epoch_entries wait_epoch;
+	struct fbr_wait_job_entries waiters_job;
+	struct fbr_epoch_entries wait_job_epoch;
 
 	uint32_t thread_max;
 	uint32_t callers_max;
 	struct fbr_allocator alloc;
+	bool wait_enable;
+	bool wait_job_enable;
 };
 
 inline static void fbr_free_sync(struct fbr_pool *pool)
@@ -78,6 +83,8 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->threads.array, NULL);
 	ck_pr_store_ptr(&pool->waiters.array, NULL);
 	ck_pr_store_ptr(&pool->wait_epoch.array, NULL);
+	ck_pr_store_ptr(&pool->waiters_job.array, NULL);
+	ck_pr_store_ptr(&pool->wait_job_epoch.array, NULL);
 	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
 	ck_pr_store_ptr(&pool->alloc.free, NULL);
 	ck_pr_fence_memory();
@@ -88,8 +95,14 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	/* Free bm allocators */
 	fbr_job_entries_free(&pool->jobs_current, alloc_free);
 	fbr_thread_entries_free(&pool->threads, alloc_free);
-	fbr_wait_entries_free(&pool->waiters, alloc_free);
-	fbr_epoch_entries_free(&pool->wait_epoch, alloc_free);
+	if (pool->wait_enable) {
+		fbr_wait_entries_free(&pool->waiters, alloc_free);
+		fbr_epoch_entries_free(&pool->wait_epoch, alloc_free);
+	}
+	if (pool->wait_job_enable) {
+		fbr_wait_job_entries_free(&pool->waiters_job, alloc_free);
+		fbr_epoch_entries_free(&pool->wait_job_epoch, alloc_free);
+	}
 
 	/* Free the pool */
 	alloc_free(pool);

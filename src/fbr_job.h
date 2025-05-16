@@ -7,20 +7,32 @@
 
 #include <ck_pr.h>
 
+#include <fbr.h>
 #include <fbr_errno.h>
 
 #include "fbr_bm_alloc.h"
 #include "fbr_debug.h"
 
-struct fbr_job_entry {
-	int active;
-	uint64_t job_id;
-};
-
 struct fbr_job_entries {
 	struct fbr_bm_alloc_meta meta;
 	struct fbr_job_entry *array;
 };
+
+inline static void fbr_job_entry_set_inactive(struct fbr_job_entry *entry)
+{
+	(void)ck_pr_fas_int(&entry->active, 0);
+}
+
+inline static void fbr_job_entry_set_active(struct fbr_job_entry *entry,
+					    uint64_t job_id)
+{
+	ck_pr_store_64(&entry->job_id, job_id);
+	if (ck_pr_load_int(&entry->active)) {
+		ck_pr_fence_memory();
+	} else {
+		(void)ck_pr_fas_int(&entry->active, 1);
+	}
+}
 
 inline static fbr_errno_t fbr_job_entries_init(struct fbr_job_entries *j,
 					       uint32_t thread_max,

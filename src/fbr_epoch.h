@@ -16,12 +16,8 @@
 
 #define FBR_EPOCH_GRACE (2)
 
-// Should be a power of two
-#define FBR_EPOCH_TRY_ADVANCE_NTH ((unsigned int)(1 << 2))
-
 struct fbr_epoch_entry {
 	int active;
-	unsigned int exit_count;
 	uint64_t epoch;
 };
 
@@ -41,11 +37,10 @@ inline static int64_t fbr_epoch_cmp(uint64_t a, uint64_t b)
 	return (int64_t)(a - b);
 }
 
-FBR_ATTR_NO_SANITIZE_OVERFLOW
-inline static unsigned int fbr_epoch_exit_count_inc_fetch(struct fbr_epoch_entry *entry)
+inline static uint32_t fbr_epoch_buffer_len(uint32_t thread_max,
+					    uint32_t callers_max)
 {
-	entry->exit_count += 1;
-	return entry->exit_count;
+	return callers_max * (thread_max + callers_max + FBR_EPOCH_GRACE);
 }
 
 inline static fbr_errno_t fbr_epoch_entries_init(struct fbr_epoch_entries *e,
@@ -65,7 +60,6 @@ inline static fbr_errno_t fbr_epoch_entries_init(struct fbr_epoch_entries *e,
 	e->array = arr;
 	for (uint32_t i = 0; i < num; ++i) {
 		e->array[i].active = 0;
-		e->array[i].exit_count = 0;
 		e->array[i].epoch = FBR_EPOCH_GRACE;
 	}
 
@@ -82,7 +76,7 @@ inline static void fbr_epoch_entries_free(struct fbr_epoch_entries *e,
 }
 
 inline static fbr_errno_t fbr_epoch_malloc(struct fbr_epoch_entries *e,
-		struct fbr_epoch_entry **entry)
+					   struct fbr_epoch_entry **entry)
 {
 	fbr_errno_t err;
 	uint32_t idx;
@@ -99,7 +93,8 @@ inline static fbr_errno_t fbr_epoch_malloc(struct fbr_epoch_entries *e,
 	return FBR_EOK;
 }
 
-inline static void fbr_epoch_free(struct fbr_epoch_entries *e, struct fbr_epoch_entry *entry)
+inline static void fbr_epoch_free(struct fbr_epoch_entries *e,
+				  struct fbr_epoch_entry *entry)
 {
 	uint32_t idx;
 
@@ -111,7 +106,7 @@ inline static void fbr_epoch_free(struct fbr_epoch_entries *e, struct fbr_epoch_
 }
 
 inline static void fbr_epoch_enter(struct fbr_epoch_entries *e,
-					  struct fbr_epoch_entry *entry)
+				   struct fbr_epoch_entry *entry)
 {
 	uint64_t epoch;
 
@@ -135,11 +130,7 @@ inline static void fbr_epoch_exit(struct fbr_epoch_entries *e,
 	fbr_assert(entry >= e->array);
 
 	(void)ck_pr_fas_int(&entry->active, 0);
-	exit_count = fbr_epoch_exit_count_inc_fetch(entry);
 
-	if (exit_count & (FBR_EPOCH_TRY_ADVANCE_NTH - 1)) {
-		return;
-	}
 	/* Check if we can advance the global epoch counter. We cannot
 	 * advance if there is an active thread with an epoch lower than
 	 * current global.
@@ -164,7 +155,8 @@ inline static void fbr_epoch_exit(struct fbr_epoch_entries *e,
 		active_count += 1;
 	}
 	if (active_count == 0 || fbr_epoch_cmp(local_min, epoch_global) >= 0) {
-		(void)ck_pr_cas_64(&e->epoch_global, epoch_global, epoch_global + 1);
+		(void)ck_pr_cas_64(&e->epoch_global, epoch_global,
+				   epoch_global + 1);
 	}
 }
 
