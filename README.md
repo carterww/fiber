@@ -4,7 +4,7 @@ Fiber currently only supports POSIX threads, but it allows an external thread to
 Some of Fiber's highlights include:
 1. **No Locks**: No need to worry about deadlocks or unpredictable latency spikes.
 2. **No Memory Allocation after Initialization**: All memory needed by the thread pool is allocated at
-   initialization time. The only exception is if threads are added later.
+   initialization time.
 3. **Swappable Job Queues**: Select a job queue that suits your needs at initialization. Only one queue
    implementation is supported, but more are on the way.
 4. **Portability**: Fiber is built with portability in mind for UNIX-like systems and embedded
