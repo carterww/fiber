@@ -14,7 +14,6 @@ set(CK_INCLUDE_DIR "${CK_ROOT}/include")
 
 set(LIB_TARGET ${PROJECT_NAME})
 set(THREAD_TARGET fiber_thread)
-set(FUTEX_TARGET fiber_futex)
 set(JQ_RING_TARGET fiber_jq_ring)
 
 set(COMMON_COMPILE_DEFS "")
@@ -184,48 +183,28 @@ create_build_enum_option(THREAD_IMPL
     posix
     posix
 )
-create_build_enum_option(MUTEX_IMPL
-    "Which mutex implementation to use"
-    posix
-    posix
-)
-create_build_enum_option(SEMAPHORE_IMPL
-    "Which semaphore implementation to use"
-    posix
-    posix
-)
-create_build_enum_option(FUTEX_IMPL
-    "Which futex implementation to use"
-    linux
-    linux
-)
 set(LIB_SOURCE_FILES
     src/fbr_api.c
     src/fbr_worker.c
+    src/fbr_futex.c
 )
 
 if (THREAD_IMPL STREQUAL "posix")
 	set(THREAD_SOURCE_FILES src/posix/fbr_posix_thread.c)
-endif()
-if (FUTEX_IMPL STREQUAL "linux")
-	set(FUTEX_SOURCE_FILES src/linux/fbr_linux_futex.c)
 endif()
 add_library(${LIB_TARGET}_static STATIC ${LIB_SOURCE_FILES})
 add_library(${LIB_TARGET}_shared SHARED ${LIB_SOURCE_FILES})
 set_target_properties(${LIB_TARGET}_static PROPERTIES OUTPUT_NAME ${LIB_TARGET})
 set_target_properties(${LIB_TARGET}_shared PROPERTIES OUTPUT_NAME ${LIB_TARGET})
 add_library(${THREAD_TARGET} STATIC ${THREAD_SOURCE_FILES})
-add_library(${FUTEX_TARGET} STATIC ${FUTEX_SOURCE_FILES})
 add_library(${JQ_RING_TARGET} STATIC src/fbr_jq_ring.c)
 
 target_link_libraries(${LIB_TARGET}_static ${CK_LIBRARY})
 target_link_libraries(${LIB_TARGET}_static ${THREAD_TARGET})
-target_link_libraries(${LIB_TARGET}_static ${FUTEX_TARGET})
 target_link_libraries(${LIB_TARGET}_static ${JQ_RING_TARGET})
 
 target_link_libraries(${LIB_TARGET}_shared ${CK_LIBRARY})
 target_link_libraries(${LIB_TARGET}_shared ${THREAD_TARGET})
-target_link_libraries(${LIB_TARGET}_shared ${FUTEX_TARGET})
 target_link_libraries(${LIB_TARGET}_shared ${JQ_RING_TARGET})
 
 target_include_directories(${LIB_TARGET}_static PUBLIC
@@ -255,9 +234,6 @@ target_compile_definitions(${LIB_TARGET}_shared PRIVATE
 target_compile_definitions(${THREAD_TARGET} PRIVATE
     ${COMMON_COMPILE_DEFS}
 )
-target_compile_definitions(${FUTEX_TARGET} PRIVATE
-    ${COMMON_COMPILE_DEFS}
-)
 target_compile_definitions(${JQ_RING_TARGET} PRIVATE
     ${COMMON_COMPILE_DEFS}
 )
@@ -269,9 +245,6 @@ target_include_directories(${LIB_TARGET}_shared PRIVATE
     ${COMMON_INTERNAL_INCLUDES}
 )
 target_include_directories(${THREAD_TARGET} PRIVATE
-    ${COMMON_INTERNAL_INCLUDES}
-)
-target_include_directories(${FUTEX_TARGET} PRIVATE
     ${COMMON_INTERNAL_INCLUDES}
 )
 target_include_directories(${JQ_RING_TARGET} PRIVATE
