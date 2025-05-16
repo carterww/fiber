@@ -120,10 +120,8 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	uint32_t thread_idx;
 	bool thread_entry_found;
 	fbr_errno_t err_setup;
-	struct fbr_thread *entries;
 	struct fbr_thread *entry;
 
-	/* Don't allow thread to be canceled during setup */
 	err_setup = fbr_thread_cancel_disable();
 	fbr_assert(err_setup == FBR_EOK);
 
@@ -135,8 +133,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 		&pool->threads, &thread_id, &thread_idx);
 	fbr_assert(thread_entry_found == true);
 	ck_pr_inc_uint(&pool->thread_num);
-	entries = ck_pr_load_ptr(&pool->threads.array);
-	entry = &entries[thread_idx];
+	entry = &pool->threads.array[thread_idx];
 
 	/* A race is possible if we don't wait for this to be
 	 * true.
@@ -145,15 +142,10 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 		;
 
 	fbr_thread_cleanup_push(fbr_worker_cleanup, entry);
-	err_setup = fbr_thread_cancel_type_set(FBR_THREAD_CANCEL_DEFERRED);
-	fbr_assert(err_setup == FBR_EOK);
-	err_setup = fbr_thread_cancel_enable();
-	fbr_assert(err_setup == FBR_EOK);
 
 	fbr_worker_runner_loop(pool);
 
 	/* Reaching this point means the thread is trying to end itself. */
-	fbr_thread_cancel_disable();
 	fbr_thread_cleanup_pop(1);
 	fbr_thread_exit(NULL);
 	return NULL;

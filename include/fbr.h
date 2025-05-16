@@ -52,6 +52,7 @@ typedef struct fbr_queue_ops fbr_queue_ops_t;
 struct fbr_init_options {
 	struct fbr_queue_ops queue_ops;
 	struct fbr_allocator allocator;
+	size_t thread_stack_size_bytes;
 	uint32_t thread_num;
 	uint32_t queue_len;
 	uint32_t thread_max;

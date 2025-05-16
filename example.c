@@ -128,6 +128,7 @@ static struct fbr_pool *pool_init(uint32_t tnum, uint32_t queue_length)
 	fbr_init_result_t init_res;
 	fbr_init_options_t pool_options = { FBR_JQ_RING_QUEUE_OPS,
 					    { malloc, free },
+					    0,
 					    tnum,
 					    queue_length,
 					    threads_num[threads_num_len - 1],

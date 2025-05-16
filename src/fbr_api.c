@@ -68,6 +68,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	pool->tw_ql.items.queue_length = 0;
 	pool->thread_kill_num = 0;
 	pool->thread_num = 0;
+	pool->thread_stack_size = opt->thread_stack_size_bytes;
 	pool->thread_max = opt->thread_max;
 	pool->callers_max = opt->callers_max;
 	pool->alloc = opt->allocator;
@@ -555,15 +556,12 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		ck_pr_fence_memory();
 		err = fbr_thread_create(&thread_entry->thread.internal.id,
 					fbr_worker_runner_internal,
-					(void *)pool);
+					(void *)pool, pool->thread_stack_size);
 		if (err != FBR_EOK) {
 			return err;
 		}
 		int prev_started = ck_pr_fas_int(&thread_entry->started, 1);
 		fbr_assert(prev_started == 0);
-		ck_pr_barrier();
-		err = fbr_thread_detach(&thread_entry->thread.internal.id);
-		fbr_assert(err == FBR_EOK);
 	}
 	return FBR_EOK;
 }

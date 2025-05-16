@@ -49,6 +49,7 @@ struct fbr_pool {
 	struct fbr_wait_job_entries waiters_job;
 	struct fbr_hp_entries wait_job_hp;
 
+	size_t thread_stack_size;
 	uint32_t thread_max;
 	uint32_t callers_max;
 	struct fbr_allocator alloc;

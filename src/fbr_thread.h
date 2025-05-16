@@ -25,7 +25,7 @@ typedef pthread_t tid_t;
  * This limit could be from a system policy, insufficient resources, etc.
  */
 fbr_errno_t fbr_thread_create(tid_t *thread_id, void *(*entry)(void *),
-			      void *arg);
+			      void *arg, size_t stack_size);
 
 /* Exits a thread. This function should only be called within a thread created by
  * fbr_thread_create. Attempting to exit from a process/thread not created with
@@ -42,18 +42,6 @@ void fbr_thread_exit(void *ret_val);
  * indicate a bug so we panic.
  */
 fbr_errno_t fbr_thread_detach(const tid_t *thread_id);
-
-/* Waits for a thread created with fbr_thread_create to terminate. After this function
- * returns, it is guaranteed that the thread has terminated. The thread's return value
- * is placed in ret_val. Calling this function on a joined thread results in undefined
- * behavior.
- * @param thread_id -> The id of the thread to join.
- * @param ret_val -> Return value of the thread. The return value (type of void *) is
- * placed in ret_val. If ret_val is NULL, the return value of the thread is not returned.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-fbr_errno_t fbr_thread_join(const tid_t *thread_id, void **ret_val);
 
 /* Allows a thread created by fbr_thread_create to enable cancelation. After this
  * call, the thread will not block any cancelation request from fbr_thread_cancel.
@@ -74,31 +62,6 @@ fbr_errno_t fbr_thread_cancel_enable(void);
  * indicate a bug so we panic.
  */
 fbr_errno_t fbr_thread_cancel_disable(void);
-
-/* Sets the cancelability type of the calling thread. Calling this function from
- * outside a thread created with fbr_thread_create results in undefined behavior.
- * @param cancel_type -> Can be any of the following options:
- *     - FIBER_THREAD_CANCEL_DEFERRED: Defer the threads cancelation until a viable
- *       "cancelation point."
- *     - FIBER_THREAD_CANCEL_ASYNCHRONOUS: Cancel the thread ASAP.
- * If your platform is missing some of these options or has more options, do not
- * worry. A thread's cancelation type will not change Fiber's behavior. All that
- * matters is that the thread gets canceled and the cleanup routines are executed
- * upon cancelation.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-fbr_errno_t fbr_thread_cancel_type_set(int cancel_type);
-
-/* Sends a cancelation request to a fbr_thread with the id thread_id. The thread
- * may not be canceled immediately depending on the thread's cancel state and type.
- * @param thread_id -> The id of the thread to cancel.
- * @returns -> 0 if the call was successful, an error otherwise.
- * @note As of now, there are no error codes returned by this function. All error cases
- * indicate a bug so we panic.
- */
-fbr_errno_t fbr_thread_cancel(const tid_t *thread_id);
 
 #if defined(FIBER_BUILD_OPT_THREAD_IMPL_POSIX)
 /* Pushes a cleanup routine that should be executed once the thread calls fbr_thread_exit
@@ -126,9 +89,6 @@ fbr_errno_t fbr_thread_cancel(const tid_t *thread_id);
  * pair or else a syntax error will occur.
  */
 #define fbr_thread_cleanup_pop(execute) pthread_cleanup_pop(execute)
-
-#define FBR_THREAD_CANCEL_DEFERRED (PTHREAD_CANCEL_DEFERRED)
-#define FBR_THREAD_CANCEL_ASYNCHRONOUS (PTHREAD_CANCEL_ASYNCHRONOUS)
 
 inline static tid_t fbr_thread_self(void)
 {
