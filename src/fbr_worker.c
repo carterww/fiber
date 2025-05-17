@@ -214,7 +214,7 @@ void fbr_worker_runner_loop(struct fbr_pool *pool)
 
 	waiters_retired_threshhold = MAX(
 		1,
-		fbr_hp_buffer_len(pool->thread_max, pool->callers_max, 1) / 4);
+		fbr_hp_array_len(pool->thread_max, pool->callers_max, 1) / 4);
 loop:
 	while (true) {
 		pop_num = pool->job_queue_ops.pop(pool->job_queue, &buff,

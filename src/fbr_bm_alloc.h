@@ -56,47 +56,52 @@ not_max:
 
 #define FBR_BM_ALLOC_CAP(meta_ptr) ((meta_ptr)->bm->n_bits)
 
+inline static size_t fbr_bm_alloc_size_base(uint32_t entries)
+{
+	size_t base_size = ck_bitmap_size(entries);
+	return FBR_SIZE_ROUND_CACHELINE(base_size);
+}
+
+inline static size_t fbr_bm_alloc_size_entries(uint32_t entries,
+					       size_t entry_size)
+{
+	size_t entries_size = entries * entry_size;
+	return FBR_SIZE_ROUND_MIN_ALIGNMENT(entries_size);
+}
+
+inline static size_t fbr_bm_alloc_size(uint32_t entries, size_t entry_size)
+{
+	return fbr_bm_alloc_size_base(entries) +
+	       fbr_bm_alloc_size_entries(entries, entry_size);
+}
+
 inline static void *fbr_bm_alloc_init(struct fbr_bm_alloc_meta *meta,
 				      size_t entry_size, unsigned int entries,
-				      void *(*malloc)(size_t))
+				      void *buffer, size_t buffer_size)
 {
-	size_t bm_size;
+	size_t base_size;
 	size_t entries_size;
-	void *ptr;
+	void *arr_ptr;
 
 	fbr_assert(meta != NULL);
-	fbr_assert(malloc != NULL);
+	fbr_assert(buffer != NULL);
+	fbr_assert(fbr_aligned(buffer, FBR_ALIGNMENT_MIN));
 
-	bm_size = ck_bitmap_size(entries);
-	entries_size = entries * entry_size;
-
-	/* Make BM size a multiple of cache line size. This ensures proper
-	 * alignment of the entries pointer and may help with false sharing.
-	 */
-	bm_size = (bm_size + FBR_CACHELINE_BYTES - 1) &
-		  (~(size_t)(FBR_CACHELINE_BYTES - 1));
-
-	ptr = malloc(bm_size + entries_size);
-	if (ptr == NULL) {
-		return NULL;
+	base_size = fbr_bm_alloc_size_base(entries);
+	entries_size = fbr_bm_alloc_size_entries(entries, entry_size);
+	if (buffer_size < base_size + entries_size) {
+		fbr_panic(FBR_ENOMEM);
 	}
+
 	/* Bitmap will be first */
-	meta->bm = ptr;
+	meta->bm = buffer;
 	ck_bitmap_init(meta->bm, entries, 0);
 
 	/* Array will be just after bitmap. This will be aligned properly */
-	return (void *)((uintptr_t)ptr + bm_size);
-}
+	arr_ptr = (void *)((uintptr_t)buffer + base_size);
+	fbr_assert(fbr_aligned(arr_ptr, FBR_ALIGNMENT_MIN));
 
-inline static void fbr_bm_alloc_free(struct fbr_bm_alloc_meta *meta,
-				     void (*free)(void *))
-{
-	fbr_assert(meta != NULL);
-	fbr_assert(free != NULL);
-	fbr_assert(meta->bm != NULL);
-
-	free(meta->bm);
-	meta->bm = NULL;
+	return arr_ptr;
 }
 
 inline static fbr_errno_t fbr_bm_malloc(struct fbr_bm_alloc_meta *meta,

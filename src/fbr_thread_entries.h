@@ -43,35 +43,31 @@ struct fbr_thread_entries {
 	struct fbr_thread *array;
 };
 
-inline static fbr_errno_t fbr_thread_entries_init(struct fbr_thread_entries *te,
-						  uint32_t thread_max,
-						  void *(*malloc)(size_t))
+inline static size_t fbr_thread_entries_size(uint32_t thread_max)
+{
+	size_t bm_alloc_size;
+
+	bm_alloc_size =
+		fbr_bm_alloc_size(thread_max, sizeof(struct fbr_thread));
+	return bm_alloc_size;
+}
+
+inline static void fbr_thread_entries_init(struct fbr_thread_entries *te,
+					   uint32_t thread_max, void *buffer,
+					   size_t buffer_size)
 {
 	fbr_assert(te != NULL);
-	fbr_assert(malloc != NULL);
 	fbr_assert(thread_max > 0);
+	fbr_assert(buffer != NULL);
 
 	struct fbr_thread *arr = fbr_bm_alloc_init(
-		&te->meta, sizeof(*te->array), thread_max, malloc);
-	if (arr == NULL) {
-		return FBR_ENOMEM;
-	}
+		&te->meta, sizeof(*te->array), thread_max, buffer, buffer_size);
+	fbr_assert(arr != NULL);
 	te->array = arr;
 	for (uint32_t i = 0; i < thread_max; ++i) {
 		te->array[i].type = FBR_THREAD_TYPE_NONE;
 		te->array[i].started = 0;
 	}
-
-	return FBR_EOK;
-}
-
-inline static void fbr_thread_entries_free(struct fbr_thread_entries *te,
-					   void (*free)(void *))
-{
-	fbr_assert(te != NULL);
-	fbr_assert(free != NULL);
-
-	fbr_bm_alloc_free(&te->meta, free);
 }
 
 inline static uint32_t

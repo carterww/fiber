@@ -26,9 +26,9 @@ struct fbr_hp_entries {
 	struct fbr_hp_entry *array;
 };
 
-inline static uint32_t fbr_hp_buffer_len(uint32_t thread_max,
-					 uint32_t callers_max,
-					 uint32_t hp_per_thread)
+inline static uint32_t fbr_hp_array_len(uint32_t thread_max,
+					uint32_t callers_max,
+					uint32_t hp_per_thread)
 {
 	return (thread_max + callers_max) * hp_per_thread * 2;
 }
@@ -61,34 +61,28 @@ inline static void fbr_hp_clear(struct fbr_hp_entry *entry)
 	}
 }
 
-inline static fbr_errno_t fbr_hp_entries_init(struct fbr_hp_entries *hp,
-					      uint32_t num,
-					      void *(*malloc)(size_t))
+inline static size_t fbr_hp_entries_size(uint32_t entries)
+{
+	size_t bm_alloc_size;
+
+	bm_alloc_size = fbr_bm_alloc_size(entries, sizeof(struct fbr_hp_entry));
+	return bm_alloc_size;
+}
+
+inline static void fbr_hp_entries_init(struct fbr_hp_entries *hp, uint32_t num,
+				       void *buffer, size_t buffer_size)
 {
 	fbr_assert(hp != NULL);
 	fbr_assert(num > 0);
-	fbr_assert(malloc != NULL);
+	fbr_assert(buffer != NULL);
 
-	struct fbr_hp_entry *arr =
-		fbr_bm_alloc_init(&hp->meta, sizeof(*hp->array), num, malloc);
-	if (arr == NULL) {
-		return FBR_ENOMEM;
-	}
+	struct fbr_hp_entry *arr = fbr_bm_alloc_init(
+		&hp->meta, sizeof(*hp->array), num, buffer, buffer_size);
+	fbr_assert(arr != NULL);
 	hp->array = arr;
 	for (uint32_t i = 0; i < num; ++i) {
 		fbr_hp_clear(&hp->array[i]);
 	}
-
-	return FBR_EOK;
-}
-
-inline static void fbr_hp_entries_free(struct fbr_hp_entries *hp,
-				       void (*free)(void *))
-{
-	fbr_assert(hp != NULL);
-	fbr_assert(free != NULL);
-
-	fbr_bm_alloc_free(&hp->meta, free);
 }
 
 inline static fbr_errno_t fbr_hp_malloc(struct fbr_hp_entries *hp,

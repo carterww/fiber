@@ -3,12 +3,12 @@
 #ifndef _FBR_INTERNAL_H
 #define _FBR_INTERNAL_H
 
-#include "fbr_futex.h"
 #include <limits.h>
 
 #include <fbr.h>
 
 #include "fbr_cc.h"
+#include "fbr_futex.h"
 #include "fbr_hp.h"
 #include "fbr_job.h"
 #include "fbr_platform.h"
@@ -52,27 +52,30 @@ struct fbr_pool {
 	size_t thread_stack_size;
 	uint32_t thread_max;
 	uint32_t callers_max;
-	struct fbr_allocator alloc;
+	void (*free)(void *);
 	uint32_t free_futex;
 	bool wait_enable;
 	bool wait_job_enable;
+	bool owns_buffer;
 };
+
+inline static size_t fbr_pool_size(void)
+{
+	return FBR_SIZE_ROUND_CACHELINE(sizeof(struct fbr_pool));
+}
 
 inline static void fbr_free_sync(struct fbr_pool *pool)
 {
 	void *jq;
 	void (*jq_free)(void *);
-	void (*alloc_free)(void *);
 
 	fbr_assert(pool != NULL);
 
 	jq = pool->job_queue;
 	jq_free = pool->job_queue_ops.free;
-	alloc_free = pool->alloc.free;
 
 	fbr_assert(jq != NULL);
 	fbr_assert(jq_free != NULL);
-	fbr_assert(alloc_free != NULL);
 
 	/* This isn't strictly necessary but it will help make use
 	 * after free bugs easier to find.
@@ -88,23 +91,10 @@ inline static void fbr_free_sync(struct fbr_pool *pool)
 	ck_pr_store_ptr(&pool->wait_hp.array, NULL);
 	ck_pr_store_ptr(&pool->waiters_job.array, NULL);
 	ck_pr_store_ptr(&pool->wait_job_hp.array, NULL);
-	ck_pr_store_ptr(&pool->alloc.malloc, NULL);
 	ck_pr_fence_memory();
 
 	/* Free job queue */
 	jq_free(jq);
-
-	/* Free bm allocators */
-	fbr_job_entries_free(&pool->jobs_current, alloc_free);
-	fbr_thread_entries_free(&pool->threads, alloc_free);
-	if (pool->wait_enable) {
-		fbr_wait_entries_free(&pool->waiters, alloc_free);
-		fbr_hp_entries_free(&pool->wait_hp, alloc_free);
-	}
-	if (pool->wait_job_enable) {
-		fbr_wait_job_entries_free(&pool->waiters_job, alloc_free);
-		fbr_hp_entries_free(&pool->wait_job_hp, alloc_free);
-	}
 
 	ck_pr_fas_32(&pool->free_futex, 1);
 	ck_pr_barrier();

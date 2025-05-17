@@ -132,7 +132,7 @@ $(BUILD_DIR)/example: LDFLAGS += -Wl,-rpath,$(BUILD_DIR)
 $(BUILD_DIR)/example: $(OBJ_DIR)/example.o $(SHARED_LIB)
 	@$(quiet_LD)
 	$(Q)$(LD) $(LDFLAGS) -o $@ $< -L$(BUILD_DIR) -lfiber
-	$(Q)ln -s  $(SHARED_LIB) $(SHARED_LIB).$(FIBER_VERSION_MAJOR)
+	$(Q)ln -sf  $(SHARED_LIB) $(SHARED_LIB).$(FIBER_VERSION_MAJOR)
 
 $(OBJ_DIR)/example.o: $(FIBER_DIR)/example.c | $(OBJ_DIR)
 	@$(quiet_CC)

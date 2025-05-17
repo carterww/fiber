@@ -1,3 +1,4 @@
+#include "fbr_debug.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -21,72 +22,85 @@ struct fbr_jq_entries {
 
 struct fbr_jq_ring {
 	struct fbr_jq_entries jobs;
-	char pad[FBR_CACHELINE_BYTES - sizeof(struct fbr_jq_entries)];
 	struct ck_ring ck_ring;
 	struct ck_ring_buffer *ck_ring_buffer;
-	struct fbr_allocator allocator;
 };
 
+inline static size_t fbr_jq_ring_size_base(void)
+{
+	return FBR_SIZE_ROUND_CACHELINE(sizeof(struct fbr_jq_ring));
+}
+
+inline static size_t fbr_jq_ring_size_ck_ring_buffer(uint32_t cap)
+{
+	size_t ck_ring_buffer_size;
+	ck_ring_buffer_size = (cap * sizeof(struct ck_ring_buffer));
+	ck_ring_buffer_size = FBR_SIZE_ROUND_CACHELINE(ck_ring_buffer_size);
+	return ck_ring_buffer_size;
+}
+
+inline static size_t fbr_jq_ring_size_bm(uint32_t cap)
+{
+	size_t bm_size;
+	bm_size = fbr_bm_alloc_size(cap, sizeof(struct fbr_job));
+	return bm_size;
+}
+
 FBR_ATTR_PUBLIC
-struct fbr_queue_init_result fbr_jq_ring_init(uint32_t cap,
+struct fbr_queue_init_result fbr_jq_ring_init(uint32_t cap, void *buffer,
+					      size_t buffer_size,
 					      struct fbr_allocator allocator)
 {
 	struct fbr_queue_init_result res = { FBR_EGENERIC, NULL };
 	struct fbr_jq_ring *queue;
+	uintptr_t buffer_current;
 	size_t queue_size;
 	size_t ck_ring_buffer_size;
+	size_t bm_size;
+
+	(void)allocator;
 
 	/* ck requires ring buffer to be a power of two and >= 4 */
 	if ((cap & (cap - 1)) != 0 || cap < 4) {
 		res.error = FBR_EINVAL;
+		return res;
 	}
 
-	queue_size = sizeof(*queue);
-	ck_ring_buffer_size = (cap * sizeof(*queue->ck_ring_buffer));
-	queue = allocator.malloc(queue_size + ck_ring_buffer_size);
-	if (queue == NULL) {
-		res.error = FBR_ENOMEM;
-		goto error;
+	queue_size = fbr_jq_ring_size_base();
+	ck_ring_buffer_size = fbr_jq_ring_size_ck_ring_buffer(cap);
+	bm_size = fbr_jq_ring_size_bm(cap);
+
+	if (buffer_size < queue_size + ck_ring_buffer_size + bm_size) {
+		res.error = FBR_EINVLD_SIZE;
+		return res;
 	}
+	if (!fbr_aligned(buffer, FBR_ALIGNMENT_MIN)) {
+		res.error = FBR_EINVAL;
+		return res;
+	}
+	queue = buffer;
+	buffer_current = (uintptr_t)buffer + queue_size;
+	queue->ck_ring_buffer = (void *)buffer_current;
+	fbr_assert(fbr_aligned(queue->ck_ring_buffer, FBR_ALIGNMENT_MIN));
+	buffer_current += ck_ring_buffer_size;
+
 	queue->jobs.array = fbr_bm_alloc_init(&queue->jobs.meta,
 					      sizeof(*queue->jobs.array), cap,
-					      allocator.malloc);
-	if (queue->jobs.array == NULL) {
-		res.error = FBR_ENOMEM;
-		goto error;
-	}
-	ck_ring_init(&queue->ck_ring, cap);
-	/* NOTE: be careful about alignment here. queue_size is a multiple of 32
-	 * right now.
-	 */
-	queue->ck_ring_buffer =
-		(struct ck_ring_buffer *)((uintptr_t)queue + queue_size);
-	queue->allocator = allocator;
+					      (void *)buffer_current, bm_size);
+	fbr_assert(queue->jobs.array != NULL);
+	fbr_assert(fbr_aligned(queue->jobs.array, FBR_ALIGNMENT_MIN));
 
+	ck_ring_init(&queue->ck_ring, cap);
 	res.error = FBR_EOK;
 	res.queue = queue;
 	return res;
-error: {
-	if (queue != NULL) {
-		if (queue->jobs.array != NULL) {
-			fbr_bm_alloc_free(&queue->jobs.meta, allocator.free);
-		}
-		allocator.free(queue);
-	}
-
-	res.queue = NULL;
-	return res;
-}
 }
 
 FBR_ATTR_PUBLIC
 void fbr_jq_ring_free(void *vqueue)
 {
 	fbr_assert(vqueue != NULL);
-	CAST_QUEUE_PTR(vqueue, queue);
-
-	fbr_bm_alloc_free(&queue->jobs.meta, queue->allocator.free);
-	queue->allocator.free(queue);
+	(void)vqueue;
 }
 
 FBR_ATTR_PUBLIC
@@ -170,4 +184,11 @@ bool fbr_jq_ring_job_in_queue(void *vqueue, uint64_t job_id)
 		}
 	}
 	return false;
+}
+
+FBR_ATTR_PUBLIC
+size_t fbr_jq_ring_size_required(uint32_t cap)
+{
+	return fbr_jq_ring_size_base() + fbr_jq_ring_size_ck_ring_buffer(cap) +
+	       fbr_jq_ring_size_bm(cap);
 }

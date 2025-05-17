@@ -136,7 +136,7 @@ static struct fbr_pool *pool_init(uint32_t tnum, uint32_t queue_length)
 					    true,
 					    false };
 
-	init_res = fbr_init(&pool_options);
+	init_res = fbr_init(&pool_options, NULL, 0);
 	if (init_res.error != FBR_EOK) {
 		printf("Error initializing the pool.\n");
 		exit(1);

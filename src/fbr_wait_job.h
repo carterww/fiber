@@ -45,23 +45,50 @@ fbr_wait_job_entry_status_get(struct fbr_wait_job_entry *e)
 	return status;
 }
 
-inline static fbr_errno_t
-fbr_wait_job_entries_init(struct fbr_wait_job_entries *w, uint32_t num,
-			  uint32_t hp_entries, struct fbr_allocator alloc)
+inline static size_t fbr_wait_job_entries_size_bm(uint32_t entries)
+{
+	return fbr_bm_alloc_size(entries, sizeof(struct fbr_wait_job_entry));
+}
+
+inline static size_t fbr_wait_job_entries_size_hp_cache(uint32_t hp_entries)
+{
+	size_t hp_cache_size;
+	hp_cache_size = sizeof(void *) * hp_entries * FBR_WAIT_HPS_PER_THREAD *
+			FBR_WAIT_CONCURRENT_RECLAIMERS_MAX;
+	hp_cache_size = FBR_SIZE_ROUND_CACHELINE(hp_cache_size);
+	return hp_cache_size;
+}
+
+inline static size_t fbr_wait_job_entries_size(uint32_t entries,
+					       uint32_t hp_entries)
+{
+	size_t bm_alloc_size = fbr_wait_job_entries_size_bm(entries);
+	size_t hp_cache_size = fbr_wait_job_entries_size_hp_cache(hp_entries);
+	return bm_alloc_size + hp_cache_size;
+}
+
+inline static void fbr_wait_job_entries_init(struct fbr_wait_job_entries *w,
+					     uint32_t num, uint32_t hp_entries,
+					     void *buffer, size_t buffer_size)
 {
 	void **hp_cache_ptr;
+	size_t bm_size;
+	size_t cache_size;
 
 	fbr_assert(w != NULL);
 	fbr_assert(num > 0);
 	fbr_assert(hp_entries > 0);
-	fbr_assert(alloc.malloc != NULL);
-	fbr_assert(alloc.free != NULL);
+	fbr_assert(buffer != NULL);
+
+	bm_size = fbr_wait_job_entries_size_bm(num);
+	cache_size = fbr_wait_job_entries_size_hp_cache(hp_entries);
+	if (buffer_size < bm_size + cache_size) {
+		fbr_panic(FBR_ENOMEM);
+	}
 
 	struct fbr_wait_job_entry *arr = fbr_bm_alloc_init(
-		&w->meta, sizeof(*w->array), num, alloc.malloc);
-	if (arr == NULL) {
-		return FBR_ENOMEM;
-	}
+		&w->meta, sizeof(*w->array), num, buffer, bm_size);
+	fbr_assert(arr != NULL);
 	w->array = arr;
 	w->retired_approx = 0;
 	w->hp_cache[0] = NULL;
@@ -69,31 +96,13 @@ fbr_wait_job_entries_init(struct fbr_wait_job_entries *w, uint32_t num,
 		w->array[i].status = FBR_WAIT_ENTRY_INACTIVE;
 		w->array[i].futex = 0;
 	}
-	hp_cache_ptr = alloc.malloc(sizeof(void *) * hp_entries *
-				    FBR_WAIT_JOB_HPS_PER_THREAD *
-				    FBR_WAIT_JOB_CONCURRENT_RECLAIMERS_MAX);
-	if (hp_cache_ptr == NULL) {
-		fbr_bm_alloc_free(&w->meta, alloc.free);
-		return FBR_ENOMEM;
-	}
+	hp_cache_ptr = (void *)((uintptr_t)buffer + bm_size);
+	fbr_assert(fbr_aligned(hp_cache_ptr, FBR_ALIGNMENT_MIN));
 	for (uint32_t i = 0; i < FBR_WAIT_JOB_CONCURRENT_RECLAIMERS_MAX; ++i) {
 		w->hp_cache[i] = hp_cache_ptr +
 				 (i * hp_entries * FBR_WAIT_JOB_HPS_PER_THREAD);
 		w->hp_cache_taken[i] = 0;
 	}
-
-	return FBR_EOK;
-}
-
-inline static void fbr_wait_job_entries_free(struct fbr_wait_job_entries *w,
-					     void (*free)(void *))
-{
-	fbr_assert(w != NULL);
-	fbr_assert(free != NULL);
-	fbr_assert(w->hp_cache[0] != NULL);
-
-	fbr_bm_alloc_free(&w->meta, free);
-	free(w->hp_cache[0]);
 }
 
 inline static fbr_errno_t

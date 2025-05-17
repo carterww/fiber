@@ -9,6 +9,9 @@
 #define fbr_static_assert(expr, message) \
 	typedef char fbr_static_assert_##message[(expr) ? 1 : -1]
 
+#define fbr_aligned(ptr, align) \
+	((((uintptr_t)ptr) & (uintptr_t)(align - 1)) == 0)
+
 #if FIBER_BUILD_OPT_COMPILE_ASSERTS != 0
 
 /* Assert macro used to ensure an assumption is true. This assert statement

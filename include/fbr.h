@@ -43,9 +43,11 @@ struct fbr_queue_init_result {
 struct fbr_queue_ops {
 	uint32_t (*push)(void *, const struct fbr_job *);
 	uint32_t (*pop)(void *, struct fbr_job *, struct fbr_job_entry *);
-	struct fbr_queue_init_result (*init)(uint32_t, struct fbr_allocator);
+	struct fbr_queue_init_result (*init)(uint32_t, void *, size_t,
+					     struct fbr_allocator);
 	void (*free)(void *);
 	bool (*job_in_queue)(void *, uint64_t);
+	size_t (*size_required)(uint32_t);
 };
 typedef struct fbr_queue_ops fbr_queue_ops_t;
 
@@ -68,7 +70,10 @@ struct fbr_init_result {
 };
 typedef struct fbr_init_result fbr_init_result_t;
 
-fbr_init_result_t fbr_init(const fbr_init_options_t *options);
+size_t fbr_buffer_size_min(const fbr_init_options_t *options);
+
+fbr_init_result_t fbr_init(const fbr_init_options_t *options, void *buffer,
+			   size_t buffer_size);
 
 void fbr_free(fbr_pool_t *pool);
 

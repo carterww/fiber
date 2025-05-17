@@ -3,7 +3,15 @@
 #ifndef _FBR_PLATFORM_H
 #define _FBR_PLATFORM_H
 
-#define FBR_CACHELINE_BYTES (64)
+#define FBR_CACHELINE_BYTES ((size_t)64)
+#define FBR_ALIGNMENT_MIN ((size_t)8)
+
+#define FBR_SIZE_ROUND_ALIGNMENT(size, a) \
+	((size_t)(size + a - 1) & ~(size_t)(a - 1))
+#define FBR_SIZE_ROUND_CACHELINE(size) \
+	FBR_SIZE_ROUND_ALIGNMENT(size, FBR_CACHELINE_BYTES)
+#define FBR_SIZE_ROUND_MIN_ALIGNMENT(size) \
+	FBR_SIZE_ROUND_ALIGNMENT(size, FBR_ALIGNMENT_MIN)
 
 /* Figure out the architecture */
 #if defined(__x86_64__) || defined(__am64__)
@@ -25,7 +33,8 @@
 #error Detected an unsupported architecture.
 #endif /* arch */
 
-#if defined(FBR_ARCH_X86_64) || defined(FBR_ARCH_ARM64) || defined(FBR_ARCH_RISCV64)
+#if defined(FBR_ARCH_X86_64) || defined(FBR_ARCH_ARM64) || \
+	defined(FBR_ARCH_RISCV64)
 #define FBR_ARCH_64_BIT
 #elif defined(FBR_ARCH_ARM) || defined(FBR_ARCH_X86)
 #define FBR_ARCH_32_BIT

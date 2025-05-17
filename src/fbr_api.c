@@ -13,6 +13,7 @@
 #include "fbr_hp.h"
 #include "fbr_internal.h"
 #include "fbr_job.h"
+#include "fbr_platform.h"
 #include "fbr_thread.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
@@ -23,19 +24,61 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 				     uint32_t *real_num);
 
 FBR_ATTR_PUBLIC
-struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
+size_t fbr_buffer_size_min(const fbr_init_options_t *opt)
+{
+	uint32_t hp_entries = opt->thread_max + opt->callers_max;
+	uint32_t wait_entries =
+		fbr_hp_array_len(opt->thread_max, opt->callers_max, 1);
+	size_t wait_size = 0;
+	size_t wait_job_size = 0;
+	size_t base_size;
+	size_t job_queue_size;
+
+	if (opt->queue_ops.size_required == NULL) {
+		return 0;
+	}
+
+	base_size = fbr_pool_size() + fbr_job_entries_size(opt->thread_max) +
+		    fbr_thread_entries_size(opt->thread_max);
+
+	if (opt->wait_enable) {
+		wait_size = fbr_wait_entries_size(wait_entries, hp_entries) +
+			    fbr_hp_entries_size(hp_entries);
+	}
+
+	if (opt->wait_job_enable) {
+		wait_job_size =
+			fbr_wait_job_entries_size(wait_entries, hp_entries) +
+			fbr_hp_entries_size(hp_entries);
+	}
+
+	job_queue_size = opt->queue_ops.size_required(opt->queue_len);
+
+	return base_size + wait_size + wait_job_size + job_queue_size;
+}
+
+FBR_ATTR_PUBLIC
+struct fbr_init_result fbr_init(const struct fbr_init_options *opt,
+				void *buffer, size_t buffer_size)
 {
 	struct fbr_init_result res = { FBR_EGENERIC, NULL };
 	struct fbr_pool *pool = NULL;
-	fbr_errno_t job_entry_err = FBR_EGENERIC;
-	fbr_errno_t thread_entry_err = FBR_EGENERIC;
-	fbr_errno_t waiters_err = FBR_EGENERIC;
-	fbr_errno_t wait_hp_err = FBR_EGENERIC;
-	fbr_errno_t waiters_job_err = FBR_EGENERIC;
-	fbr_errno_t wait_job_hp_err = FBR_EGENERIC;
 	struct fbr_queue_init_result queue_res = { FBR_EGENERIC, NULL };
 	fbr_errno_t worker_create_errno = FBR_EGENERIC;
 	uint32_t worker_num = 0;
+	bool owns_buffer = false;
+	uint32_t hp_entries;
+	uint32_t wait_entries;
+	size_t min_buffer_size;
+	size_t pool_size;
+	size_t job_entries_size;
+	size_t thread_entries_size;
+	size_t wait_entries_size;
+	size_t wait_entries_hp_size;
+	size_t wait_job_entries_size;
+	size_t wait_job_entries_hp_size;
+	size_t job_queue_size;
+	uintptr_t buffer_current;
 
 	/* Validate options */
 	if (opt == NULL) {
@@ -43,24 +86,64 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 		return res;
 	}
 	if (opt->queue_ops.push == NULL || opt->queue_ops.pop == NULL ||
-	    opt->queue_ops.init == NULL || opt->queue_ops.free == NULL) {
+	    opt->queue_ops.init == NULL || opt->queue_ops.free == NULL ||
+	    opt->queue_ops.job_in_queue == NULL ||
+	    opt->queue_ops.size_required == NULL) {
 		res.error = FBR_ENULL_ARG;
 		return res;
 	}
-	if (opt->allocator.malloc == NULL || opt->allocator.free == NULL) {
-		res.error = FBR_ENO_ALLOC;
-		return res;
-	}
-	if (opt->thread_num > opt->thread_max) {
+	if (opt->thread_max == 0 || opt->callers_max == 0 ||
+	    opt->thread_num > opt->thread_max) {
 		res.error = FBR_EINVAL;
 		return res;
 	}
-	/* Allocate the pool and set primitives */
-	pool = opt->allocator.malloc(sizeof(*pool));
-	if (pool == NULL) {
-		res.error = FBR_ENOMEM;
+	hp_entries = opt->thread_max + opt->callers_max;
+	wait_entries = fbr_hp_array_len(opt->thread_max, opt->callers_max, 1);
+	pool_size = fbr_pool_size();
+	job_entries_size = fbr_job_entries_size(opt->thread_max);
+	thread_entries_size = fbr_thread_entries_size(opt->thread_max);
+	wait_entries_size = fbr_wait_entries_size(wait_entries, hp_entries);
+	wait_entries_hp_size = fbr_hp_entries_size(hp_entries);
+	wait_job_entries_size =
+		fbr_wait_job_entries_size(wait_entries, hp_entries);
+	wait_job_entries_hp_size = fbr_hp_entries_size(hp_entries);
+	job_queue_size = opt->queue_ops.size_required(opt->queue_len);
+
+	min_buffer_size = pool_size + job_entries_size + thread_entries_size +
+			  job_queue_size;
+	if (opt->wait_enable) {
+		min_buffer_size += wait_entries_size + wait_entries_hp_size;
+	}
+	if (opt->wait_job_enable) {
+		min_buffer_size +=
+			wait_job_entries_size + wait_job_entries_hp_size;
+	}
+	if (buffer != NULL && buffer_size < min_buffer_size) {
+		res.error = FBR_EINVLD_SIZE;
 		return res;
 	}
+	if (buffer == NULL) {
+		if (opt->allocator.malloc == NULL ||
+		    opt->allocator.free == NULL) {
+			res.error = FBR_ENO_ALLOC;
+			return res;
+		}
+		buffer = opt->allocator.malloc(min_buffer_size);
+		if (buffer == NULL) {
+			res.error = FBR_ENOMEM;
+			return res;
+		}
+		owns_buffer = true;
+	}
+	if (!fbr_aligned(buffer, FBR_ALIGNMENT_MIN)) {
+		if (owns_buffer) {
+			opt->allocator.free(buffer);
+		}
+		res.error = FBR_EINVAL;
+		return res;
+	}
+	pool = buffer;
+	buffer_current = (uintptr_t)buffer + pool_size;
 	pool->job_queue = NULL;
 	pool->job_queue_ops = opt->queue_ops;
 	pool->active = 1;
@@ -71,86 +154,67 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt)
 	pool->thread_stack_size = opt->thread_stack_size_bytes;
 	pool->thread_max = opt->thread_max;
 	pool->callers_max = opt->callers_max;
-	pool->alloc = opt->allocator;
+	pool->free = opt->allocator.free;
 	pool->free_futex = 0;
 	pool->wait_enable = opt->wait_enable;
 	pool->wait_job_enable = opt->wait_job_enable;
+	pool->owns_buffer = owns_buffer;
 
 	/* Initialization after this point must goto init_error in order to cleanup
 	 * resources.
 	 */
 
 	/* Init current job list allocator */
-	job_entry_err = fbr_job_entries_init(
-		&pool->jobs_current, opt->thread_max, opt->allocator.malloc);
-	if (job_entry_err != FBR_EOK) {
-		res.error = job_entry_err;
-		goto init_error;
-	}
+	fbr_job_entries_init(&pool->jobs_current, opt->thread_max,
+			     (void *)buffer_current, job_entries_size);
+	buffer_current += job_entries_size;
 
 	/* Init threads allocator. */
-	thread_entry_err = fbr_thread_entries_init(
-		&pool->threads, opt->thread_max, opt->allocator.malloc);
-	if (thread_entry_err != FBR_EOK) {
-		res.error = thread_entry_err;
-		goto init_error;
-	}
+	fbr_thread_entries_init(&pool->threads, opt->thread_max,
+				(void *)buffer_current, thread_entries_size);
+	buffer_current += thread_entries_size;
 
 	/* Init waiters allocator. These cannot be reclaimed instantly so they
 	 * are overallocated.
 	 */
 	if (opt->wait_enable) {
-		uint32_t hp_entries_count = opt->thread_max + opt->callers_max;
-		waiters_err = fbr_wait_entries_init(
-			&pool->waiters,
-			fbr_hp_buffer_len(opt->thread_max, opt->callers_max, 1),
-			hp_entries_count, opt->allocator);
-		if (waiters_err != FBR_EOK) {
-			res.error = waiters_err;
-			goto init_error;
-		}
+		fbr_wait_entries_init(&pool->waiters, wait_entries, hp_entries,
+				      (void *)buffer_current,
+				      wait_entries_size);
+		buffer_current += wait_entries_size;
 
 		/* Init wait hp allocator. */
-		wait_hp_err = fbr_hp_entries_init(&pool->wait_hp,
-						  hp_entries_count,
-						  opt->allocator.malloc);
-		if (wait_hp_err != FBR_EOK) {
-			res.error = wait_hp_err;
-			goto init_error;
-		}
+		fbr_hp_entries_init(&pool->wait_hp, hp_entries,
+				    (void *)buffer_current,
+				    wait_entries_hp_size);
+		buffer_current += wait_entries_hp_size;
 	}
 
 	/* Init job waiters allocator. These cannot be reclaimed instantly so they
 	 * are overallocated.
 	 */
 	if (opt->wait_job_enable) {
-		uint32_t hp_entries_count = opt->thread_max + opt->callers_max;
-		waiters_job_err = fbr_wait_job_entries_init(
-			&pool->waiters_job,
-			fbr_hp_buffer_len(opt->thread_max, opt->callers_max, 1),
-			hp_entries_count, opt->allocator);
-		if (waiters_job_err != FBR_EOK) {
-			res.error = waiters_job_err;
-			goto init_error;
-		}
+		fbr_wait_job_entries_init(&pool->waiters_job, wait_entries,
+					  hp_entries, (void *)buffer_current,
+					  wait_job_entries_size);
+		buffer_current += wait_job_entries_size;
 
 		/* Init wait job epoch allocator. */
-		wait_job_hp_err = fbr_hp_entries_init(&pool->wait_job_hp,
-						      hp_entries_count,
-						      opt->allocator.malloc);
-		if (wait_job_hp_err != FBR_EOK) {
-			res.error = wait_job_hp_err;
-			goto init_error;
-		}
+		fbr_hp_entries_init(&pool->wait_job_hp, hp_entries,
+				    (void *)buffer_current,
+				    wait_job_entries_hp_size);
+		buffer_current += wait_job_entries_hp_size;
 	}
 
 	/* Initialize job queue */
-	queue_res = opt->queue_ops.init(opt->queue_len, opt->allocator);
+	queue_res = opt->queue_ops.init(opt->queue_len, (void *)buffer_current,
+					job_queue_size, opt->allocator);
 	if (queue_res.error != FBR_EOK || queue_res.queue == NULL) {
 		res.error = queue_res.error;
 		goto init_error;
 	}
 	pool->job_queue = queue_res.queue;
+	buffer_current += job_queue_size;
 
 	/* Start threads */
 	worker_create_errno =
@@ -180,39 +244,16 @@ init_error: {
 			wait_err = fbr_futex_wait(&pool->free_futex, 0);
 		}
 		fbr_assert(wait_err == FBR_EOK);
-		opt->allocator.free(pool);
+		if (owns_buffer) {
+			opt->allocator.free(buffer);
+		}
 		return res;
 	}
 	if (queue_res.error == FBR_EOK && queue_res.queue != NULL) {
 		opt->queue_ops.free(queue_res.queue);
 	}
-	if (opt->wait_job_enable && wait_job_hp_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_hp_entries_free(&pool->wait_job_hp, opt->allocator.free);
-	}
-	if (opt->wait_job_enable && waiters_job_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_wait_job_entries_free(&pool->waiters_job,
-					  opt->allocator.free);
-	}
-	if (opt->wait_enable && wait_hp_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_hp_entries_free(&pool->wait_hp, opt->allocator.free);
-	}
-	if (opt->wait_enable && waiters_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_wait_entries_free(&pool->waiters, opt->allocator.free);
-	}
-	if (thread_entry_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_thread_entries_free(&pool->threads, opt->allocator.free);
-	}
-	if (job_entry_err == FBR_EOK) {
-		fbr_assert(pool != NULL);
-		fbr_job_entries_free(&pool->jobs_current, opt->allocator.free);
-	}
-	if (pool != NULL) {
-		opt->allocator.free(pool);
+	if (pool != NULL && owns_buffer) {
+		opt->allocator.free(buffer);
 	}
 	return res;
 }
@@ -245,7 +286,9 @@ void fbr_free(fbr_pool_t *pool)
 		/* Cleanup here if no threads in pool */
 		fbr_free_sync(pool);
 	}
-	pool->alloc.free(pool);
+	if (pool->owns_buffer) {
+		pool->free(pool);
+	}
 }
 
 FBR_ATTR_PUBLIC
@@ -406,7 +449,7 @@ fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
 exit: {
 	uint32_t thresh = MAX(
 		1,
-		fbr_hp_buffer_len(pool->thread_max, pool->callers_max, 1) / 4);
+		fbr_hp_array_len(pool->thread_max, pool->callers_max, 1) / 4);
 	/* Cases are possible where no thread ever reclaims retired nodes retired
 	 * above. To prevent that, we must check here.
 	 */

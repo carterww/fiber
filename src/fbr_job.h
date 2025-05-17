@@ -18,6 +18,15 @@ struct fbr_job_entries {
 	struct fbr_job_entry *array;
 };
 
+inline static size_t fbr_job_entries_size(uint32_t thread_max)
+{
+	size_t bm_alloc_size;
+
+	bm_alloc_size =
+		fbr_bm_alloc_size(thread_max, sizeof(struct fbr_job_entry));
+	return bm_alloc_size;
+}
+
 inline static void fbr_job_entry_set_inactive(struct fbr_job_entry *entry)
 {
 	(void)ck_pr_fas_int(&entry->active, 0);
@@ -34,34 +43,21 @@ inline static void fbr_job_entry_set_active(struct fbr_job_entry *entry,
 	}
 }
 
-inline static fbr_errno_t fbr_job_entries_init(struct fbr_job_entries *j,
-					       uint32_t thread_max,
-					       void *(*malloc)(size_t))
+inline static void fbr_job_entries_init(struct fbr_job_entries *j,
+					uint32_t thread_max, void *buffer,
+					size_t buffer_size)
 {
 	fbr_assert(j != NULL);
-	fbr_assert(malloc != NULL);
 	fbr_assert(thread_max > 0);
+	fbr_assert(buffer != NULL);
 
 	struct fbr_job_entry *arr = fbr_bm_alloc_init(
-		&j->meta, sizeof(*j->array), thread_max, malloc);
-	if (arr == NULL) {
-		return FBR_ENOMEM;
-	}
+		&j->meta, sizeof(*j->array), thread_max, buffer, buffer_size);
+	fbr_assert(arr != NULL);
 	j->array = arr;
 	for (uint32_t i = 0; i < thread_max; ++i) {
 		j->array[i].active = 0;
 	}
-
-	return FBR_EOK;
-}
-
-inline static void fbr_job_entries_free(struct fbr_job_entries *j,
-					void (*free)(void *))
-{
-	fbr_assert(j != NULL);
-	fbr_assert(free != NULL);
-
-	fbr_bm_alloc_free(&j->meta, free);
 }
 
 inline static fbr_errno_t fbr_job_entry_malloc(struct fbr_job_entries *j,
