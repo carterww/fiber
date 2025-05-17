@@ -8,12 +8,15 @@
 
 #include <fbr_errno.h>
 
-#if defined(FIBER_BUILD_OPT_THREAD_IMPL_POSIX)
+#include "fbr_platform.h"
+
+#if defined(FBR_OS_LINUX) || defined(FBR_OS_FREEBSD)
+#define FBR_THREAD_PTHREAD
 #include <pthread.h>
 typedef pthread_t tid_t;
 #else
-#error THREADING_LIB was not set to a valid value in config.mk
-#endif /* FIBER_THREADING_LIB_PTHREAD */
+#error "No thread implementation provided"
+#endif
 
 /* Creates and starts a new thread. The thread's id is placed in thread_id if the
  * thread was created successfully.
@@ -63,7 +66,7 @@ fbr_errno_t fbr_thread_cancel_enable(void);
  */
 fbr_errno_t fbr_thread_cancel_disable(void);
 
-#if defined(FIBER_BUILD_OPT_THREAD_IMPL_POSIX)
+#if defined(FBR_THREAD_PTHREAD)
 /* Pushes a cleanup routine that should be executed once the thread calls fbr_thread_exit
  * or the thread is canceled by fbr_thread_cancel. The cleanup routines should be stored
  * on a stack so they run in the opposite order they were pushed (LIFO). Calling this function
@@ -100,18 +103,5 @@ inline static bool fbr_thread_tid_equal(const tid_t *t1, const tid_t *t2)
 	return pthread_equal(*t1, *t2) ? true : false;
 }
 
-#endif /* FIBER_THREADING_LIB_PTHREAD */
-
-#if defined(FIBER_THREADING_INTERCEPT)
-extern fbr_errno_t (*fbr_thread_create_fn_ptr)(tid_t *, fiber_job_function_t,
-					       void *);
-extern void (*fbr_thread_exit_fn_ptr)(void *);
-extern fbr_errno_t (*fbr_thread_detach_fn_ptr)(const tid_t *);
-extern fbr_errno_t (*fbr_thread_join_fn_ptr)(const tid_t *, void **);
-extern fbr_errno_t (*fbr_thread_cancel_enable_fn_ptr)(void);
-extern fbr_errno_t (*fbr_thread_cancel_disable_fn_ptr)(void);
-extern fbr_errno_t (*fbr_thread_cancel_type_set_fn_ptr)(int);
-extern fbr_errno_t (*fbr_thread_cancel_fn_ptr)(const tid_t *);
-#endif
-
+#endif /* FBR_THREAD_PTHREAD */
 #endif /* _FBR_THREAD_H */

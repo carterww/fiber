@@ -7,6 +7,7 @@
 #include <fbr_errno.h>
 
 #include "fbr_bm_alloc.h"
+#include "fbr_cc.h"
 #include "fbr_job.h"
 #include "fbr_platform.h"
 
@@ -26,6 +27,7 @@ struct fbr_jq_ring {
 	struct fbr_allocator allocator;
 };
 
+FBR_ATTR_PUBLIC
 struct fbr_queue_init_result fbr_jq_ring_init(uint32_t cap,
 					      struct fbr_allocator allocator)
 {
@@ -77,6 +79,7 @@ error: {
 }
 }
 
+FBR_ATTR_PUBLIC
 void fbr_jq_ring_free(void *vqueue)
 {
 	fbr_assert(vqueue != NULL);
@@ -86,6 +89,7 @@ void fbr_jq_ring_free(void *vqueue)
 	queue->allocator.free(queue);
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_jq_ring_push(void *vqueue, const struct fbr_job *job)
 {
 	fbr_assert(vqueue != NULL);
@@ -115,6 +119,7 @@ uint32_t fbr_jq_ring_push(void *vqueue, const struct fbr_job *job)
 	return 1;
 }
 
+FBR_ATTR_PUBLIC
 uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out,
 			 struct fbr_job_entry *job_entry)
 {
@@ -151,6 +156,7 @@ uint32_t fbr_jq_ring_pop(void *vqueue, struct fbr_job *job_out,
 	return 1;
 }
 
+FBR_ATTR_PUBLIC
 bool fbr_jq_ring_job_in_queue(void *vqueue, uint64_t job_id)
 {
 	fbr_assert(vqueue != NULL);

@@ -115,9 +115,9 @@ inline static void fbr_waiters_job_wake(struct fbr_pool *pool,
 
 void *fbr_worker_runner_internal(void *pool_ptr)
 {
+	uint32_t thread_idx = UINT32_MAX;
 	struct fbr_pool *pool;
 	tid_t thread_id;
-	uint32_t thread_idx;
 	bool thread_entry_found;
 	fbr_errno_t err_setup;
 	struct fbr_thread *entry;
@@ -132,6 +132,7 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	thread_entry_found = fbr_thread_entry_get_internal(
 		&pool->threads, &thread_id, &thread_idx);
 	fbr_assert(thread_entry_found == true);
+	fbr_assert(thread_idx != UINT32_MAX);
 	ck_pr_inc_uint(&pool->thread_num);
 	entry = &pool->threads.array[thread_idx];
 
@@ -183,7 +184,7 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 
 void fbr_worker_runner_loop(struct fbr_pool *pool)
 {
-	struct fbr_job_entry *job_current;
+	struct fbr_job_entry *job_current = NULL;
 	struct fbr_hp_entry *wait_hp = NULL;
 	struct fbr_hp_entry *wait_job_hp = NULL;
 	struct fbr_job buff;
@@ -343,10 +344,11 @@ static void fbr_worker_cleanup(void *thread_entry_ptr)
 		// added a thread between the thread_num decrement and here.
 		bool can_wake = fbr_waiters_can_wake_on_exit(pool, &timestamp);
 		if (can_wake) {
-			struct fbr_hp_entry *hp;
+			struct fbr_hp_entry *hp = NULL;
 			fbr_errno_t hp_malloc_err;
 
 			hp_malloc_err = fbr_hp_malloc(&pool->wait_hp, &hp);
+			fbr_assert(hp != NULL);
 			fbr_assert(hp_malloc_err == FBR_EOK);
 			fbr_waiters_wake_on_exit(pool, hp, timestamp);
 			fbr_hp_free(&pool->wait_hp, hp);

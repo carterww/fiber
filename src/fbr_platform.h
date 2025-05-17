@@ -35,7 +35,7 @@
 #if defined(__linux__)
 #define FBR_OS_LINUX
 #elif defined(__FreeBSD__)
-#define FBR_OS_BSD_FREE
+#define FBR_OS_FREEBSD
 #else
 #error Detected an unsupported operating system.
 #endif /* os */
