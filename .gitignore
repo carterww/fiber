@@ -1,14 +1,12 @@
 .cache/
 build/
-bin/
-lib/
 compile_commands.json
 gmon.out
 perf.*
 *.o
 *.a
 *.so
-fiber.h.bak
 version.plist
 xray-log*
-config.mk
+fiber.pc
+.env.mk

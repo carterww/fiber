@@ -1,32 +1,39 @@
+-include .env.mk
+
 # Build time options
 COMPILE_ASSERTS ?= 1
 
 FIBER_VERSION_MAJOR := 0
 FIBER_VERSION_MINOR := 2
 FIBER_VERSION_PATCH := 4
+FIBER_VERSION := $(FIBER_VERSION_MAJOR).$(FIBER_VERSION_MINOR).$(FIBER_VERSION_PATCH)
 
-CC ?= clang
+CC ?= cc
 LD := $(CC)
+PKG_CONFIG ?= pkg-config
 
 DESTDIR ?=
 PREFIX ?= $(DESTDIR)/usr/local
-BINDIR ?= $(PREFIX)/bin
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
+PKGCONFIGDIR ?= $(LIBDIR)/pkgconfig
 
-FIBER_PATH := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-SRC_DIR := $(FIBER_PATH)/src
-BUILD_DIR := $(FIBER_PATH)/build
+FIBER_DIR := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+SRC_DIR := $(FIBER_DIR)/src
+BUILD_DIR := $(FIBER_DIR)/build
 OBJ_DIR := $(BUILD_DIR)/objs
 
 STATIC_LIB := $(BUILD_DIR)/libfiber.a
 SHARED_LIB := $(BUILD_DIR)/libfiber.so
 ALL_LIBS := $(STATIC_LIB) $(SHARED_LIB)
 
-LDLIBS += -lck
+LDNAME = libfiber.so
+LDNAME_MAJOR = libfiber.so.$(FIBER_VERSION_MAJOR)
+LDNAME_VERSION = libfiber.so.$(FIBER_VERSION)
 
-CFLAGS += -std=c99 -fPIC -pthread -I$(FIBER_PATH)/include -I$(SRC_DIR) -I/usr/local/include
+CFLAGS += -std=c99 -fPIC -pthread -I$(FIBER_DIR)/include -I$(SRC_DIR)
 CFLAGS += -MMD -MP
+CFLAGS += $(shell $(PKG_CONFIG) --cflags ck 2>/dev/null)
 
 # Warning flags
 CFLAGS += -Werror -Wall -Wextra -Wpedantic -Wno-unused -Wfloat-equal
@@ -41,6 +48,8 @@ CFLAGS += -fsanitize-undefined-trap-on-error -fvisibility=hidden
 
 LDFLAGS += -fPIC -pthread
 LDFLAGS += -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code
+
+CK_LDFLAGS += $(shell $(PKG_CONFIG) --libs --shared ck 2>/dev/null)
 
 # release, debug, reldebug, or asan
 BUILD_TYPE ?= release
@@ -100,9 +109,9 @@ quiet_LD =
 quiet_AR =
 Q =
 else
-quiet_CC = echo " CC    $(subst $(FIBER_PATH)/,,$@)"
-quiet_LD = echo " LD    $(subst $(FIBER_PATH)/,,$@)"
-quiet_AR = echo " AR    $(subst $(FIBER_PATH)/,,$@)"
+quiet_CC = echo " CC    $(subst $(FIBER_DIR)/,,$@)"
+quiet_LD = echo " LD    $(subst $(FIBER_DIR)/,,$@)"
+quiet_AR = echo " AR    $(subst $(FIBER_DIR)/,,$@)"
 Q = @
 endif
 
@@ -110,22 +119,22 @@ all: $(ALL_LIBS)
 
 example: $(BUILD_DIR)/example
 
-$(SHARED_LIB): LDFLAGS += -Wl,-soname,libfiber.so.$(FIBER_VERSION_MAJOR) -shared 
+$(SHARED_LIB): LDFLAGS += -Wl,-soname,$(LDNAME_MAJOR) -shared
 $(SHARED_LIB): $(OBJS)
 	@$(quiet_LD)
-	$(Q)$(LD) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS) $(LDLIBS)
+	$(Q)$(LD) $(LDFLAGS) -o $(SHARED_LIB) $(OBJS) $(CK_LDFLAGS)
 
 $(STATIC_LIB): $(OBJS)
 	@$(quiet_AR)
 	$(Q)$(AR) rcs $(STATIC_LIB) $(OBJS)
 
-$(BUILD_DIR)/example: LDFLAGS += -Wl,-rpath,$(BUILD_DIR) -Wl,-rpath,/usr/local/lib
+$(BUILD_DIR)/example: LDFLAGS += -Wl,-rpath,$(BUILD_DIR)
 $(BUILD_DIR)/example: $(OBJ_DIR)/example.o $(SHARED_LIB)
 	@$(quiet_LD)
-	$(Q)$(LD) $(LDFLAGS) -o $@ $< -L$(BUILD_DIR) -lfiber $(LDLIBS)
+	$(Q)$(LD) $(LDFLAGS) -o $@ $< -L$(BUILD_DIR) -lfiber
 	$(Q)ln -s  $(SHARED_LIB) $(SHARED_LIB).$(FIBER_VERSION_MAJOR)
 
-$(OBJ_DIR)/example.o: $(FIBER_PATH)/example.c | $(OBJ_DIR)
+$(OBJ_DIR)/example.o: $(FIBER_DIR)/example.c | $(OBJ_DIR)
 	@$(quiet_CC)
 	$(Q)$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -140,5 +149,54 @@ $(OBJ_DIR):
 
 clean:
 	$(Q)rm -rf $(BUILD_DIR)
+	$(Q)rm -f fiber.pc
 
-.PHONY: all example clean
+install-headers:
+	$(Q)mkdir -p $(INCLUDEDIR)
+	$(Q)cp -p $(FIBER_DIR)/include/*.h $(INCLUDEDIR)
+	$(Q)chmod 644 $(INCLUDEDIR)/fbr*.h
+
+install-so:
+	$(Q)mkdir -p $(LIBDIR)
+	$(Q)cp -p $(BUILD_DIR)/$(LDNAME) $(LIBDIR)/$(LDNAME_VERSION)
+	$(Q)ln -sf $(LDNAME_VERSION) $(LIBDIR)/$(LDNAME)
+	$(Q)ln -sf $(LDNAME_VERSION) $(LIBDIR)/$(LDNAME_MAJOR)
+	$(Q)chmod 755 \
+		$(LIBDIR)/$(LDNAME_VERSION) \
+		$(LIBDIR)/$(LDNAME) \
+		$(LIBDIR)/$(LDNAME_MAJOR)
+
+install-static:
+	$(Q)mkdir -p $(LIBDIR)
+	$(Q)cp -p $(BUILD_DIR)/libfiber.a $(LIBDIR)/libfiber.a
+	$(Q)chmod 644 $(LIBDIR)/libfiber.a
+
+install-pc: fiber.pc
+	$(Q)mkdir -p $(PKGCONFIGDIR)
+	$(Q)cp -p fiber.pc $(PKGCONFIGDIR)/fiber.pc
+
+install: all install-headers install-so install-static install-pc
+	@echo 'Successfully installed to $(PREFIX)'
+
+uninstall:
+	$(Q)rm -f $(INCLUDEDIR)/fbr*.h
+	$(Q)rm -f $(LIBDIR)/$(LDNAME) $(LIBDIR)/$(LDNAME_MAJOR) $(LIBDIR)/$(LDNAME_VERSION)
+	$(Q)rm -f $(LIBDIR)/libfiber.a
+	$(Q)rm -f $(PKGCONFIGDIR)/fiber.pc
+
+fiber.pc:
+	@echo 'prefix=$(PREFIX)' > $@
+	@echo 'exec_prefix=$${prefix}' >> $@
+	@echo 'includedir=$${prefix}/include' >> $@
+	@echo 'libdir=$${exec_prefix}/lib' >> $@
+	@echo '' >> $@
+	@echo 'Name: Fiber' >> $@
+	@echo 'Description: Lock-free thread pool library built on top of POSIX threads.' >> $@
+	@echo 'URL: https://github.com/carterww/fiber' >> $@
+	@echo 'Version: $(FIBER_VERSION)' >> $@
+	@echo 'Libs: -L$${libdir} -lfiber' >> $@
+	@echo 'Libs.private: -lck' >> $@
+	@echo 'Cflags: -I$${includedir}' >> $@
+
+.PHONY: all example clean \
+	install-headers install-so install-static install-pc install uninstall
