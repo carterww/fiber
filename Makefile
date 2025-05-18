@@ -48,6 +48,7 @@ CFLAGS += -fsanitize-undefined-trap-on-error -fvisibility=hidden
 
 LDFLAGS += -fPIC -pthread
 LDFLAGS += -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack -Wl,-z,separate-code
+LDFLAGS += -Wl,-rpath,$(shell $(PKG_CONFIG) --variable=libdir --shared ck 2>/dev/null)
 
 CK_LDFLAGS += $(shell $(PKG_CONFIG) --libs --shared ck 2>/dev/null)
 
