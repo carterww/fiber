@@ -83,7 +83,7 @@ inline static void fbr_wait_job_entries_init(struct fbr_wait_job_entries *w,
 	bm_size = fbr_wait_job_entries_size_bm(num);
 	cache_size = fbr_wait_job_entries_size_hp_cache(hp_entries);
 	if (buffer_size < bm_size + cache_size) {
-		fbr_panic(FBR_ENOMEM);
+		fbr_unreachable();
 	}
 
 	struct fbr_wait_job_entry *arr = fbr_bm_alloc_init(

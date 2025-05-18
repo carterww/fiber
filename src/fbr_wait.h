@@ -101,8 +101,9 @@ inline static void fbr_wait_entries_init(struct fbr_wait_entries *w,
 	bm_size = fbr_wait_entries_size_bm(num);
 	cache_size = fbr_wait_entries_size_hp_cache(hp_entries);
 	if (buffer_size < bm_size + cache_size) {
-		fbr_panic(FBR_ENOMEM);
+		fbr_unreachable();
 	}
+
 	struct fbr_wait_entry *arr = fbr_bm_alloc_init(
 		&w->meta, sizeof(*w->array), num, buffer, bm_size);
 	fbr_assert(arr != NULL);

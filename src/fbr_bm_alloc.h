@@ -11,6 +11,7 @@
 
 #include <fbr_errno.h>
 
+#include "fbr_cc.h"
 #include "fbr_debug.h"
 #include "fbr_platform.h"
 
@@ -90,7 +91,7 @@ inline static void *fbr_bm_alloc_init(struct fbr_bm_alloc_meta *meta,
 	base_size = fbr_bm_alloc_size_base(entries);
 	entries_size = fbr_bm_alloc_size_entries(entries, entry_size);
 	if (buffer_size < base_size + entries_size) {
-		fbr_panic(FBR_ENOMEM);
+		fbr_unreachable();
 	}
 
 	/* Bitmap will be first */
