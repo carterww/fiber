@@ -5,6 +5,9 @@
 
 #include <limits.h>
 
+/**
+ * @brief Error enum used throughout Fiber.
+ */
 enum fbr_errno {
 	FBR_EGENERIC = INT_MIN,
 	FBR_EINVAL,

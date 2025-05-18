@@ -151,6 +151,12 @@ clean:
 	$(Q)rm -rf $(BUILD_DIR)
 	$(Q)rm -f fiber.pc
 
+docs:
+	$(Q)doxygen Doxyfile
+
+docs-open:
+	$(Q)$$BROWSER docs/html/index.html
+
 install-headers:
 	$(Q)mkdir -p $(INCLUDEDIR)
 	$(Q)cp -p $(FIBER_DIR)/include/*.h $(INCLUDEDIR)
@@ -199,4 +205,5 @@ fiber.pc:
 	@echo 'Cflags: -I$${includedir}' >> $@
 
 .PHONY: all example clean \
+	docs \
 	install-headers install-so install-static install-pc install uninstall

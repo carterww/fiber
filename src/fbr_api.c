@@ -281,7 +281,7 @@ void fbr_free(fbr_pool_t *pool)
 		while (ck_pr_load_32(&pool->free_futex) == 0) {
 			wait_err = fbr_futex_wait(&pool->free_futex, 0);
 		}
-		fbr_assert(wait_err == FBR_EOK);
+		fbr_assert(wait_err == FBR_EOK || wait_err == FBR_EAGAIN);
 	} else {
 		/* Cleanup here if no threads in pool */
 		fbr_free_sync(pool);
@@ -364,10 +364,9 @@ fbr_errno_t fbr_wait(fbr_pool_t *pool)
 
 	while (ck_pr_load_32(&wait_entry->futex) == 0) {
 		res = fbr_futex_wait(&wait_entry->futex, 0);
-		if (res == FBR_EAGAIN) {
-			res = FBR_EOK;
-			break;
-		}
+	}
+	if (res == FBR_EAGAIN) {
+		res = FBR_EOK;
 	}
 
 exit:
@@ -440,10 +439,9 @@ fbr_errno_t fbr_wait_job(fbr_pool_t *pool, uint64_t job_id)
 
 	while (ck_pr_load_32(&wait_job_entry->futex) == 0) {
 		res = fbr_futex_wait(&wait_job_entry->futex, 0);
-		if (res == FBR_EAGAIN) {
-			res = FBR_EOK;
-			break;
-		}
+	}
+	if (res == FBR_EAGAIN) {
+		res = FBR_EOK;
 	}
 
 exit: {

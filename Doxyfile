@@ -1,0 +1,28 @@
+# Doxyfile 1.13.2
+# Project details
+PROJECT_NAME           = "Fiber"
+OUTPUT_DIRECTORY       = docs
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# Input
+INPUT                  = include/
+FILE_PATTERNS          = *.h
+RECURSIVE              = YES
+
+# Extract documentation from code
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = NO
+EXTRACT_LOCAL_CLASSES  = NO
+
+# Source code formatting
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = YES
+
+# HTML settings
+HTML_OUTPUT            = html
+GENERATE_TREEVIEW      = YES
+
+# Warnings
+WARN_IF_UNDOCUMENTED   = YES
