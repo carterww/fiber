@@ -35,21 +35,14 @@ static void pretty_print_result(uint32_t threads_num, suseconds_t duration);
 /* This is the function that will be called invoked by a thread in the pool.
  * For this example, it just performs some CPU bound busy work.
  */
-static void *fib_runner(void *arg)
+static void *runner(void *arg)
 {
-	unsigned long a = 0;
-	unsigned long b = 1;
-	int i = 1;
-
-	(void)arg;
-	/* I know b isn't the real fib due to overflow. This is just busy work */
-	while (i < fib_to) {
-		unsigned long c = a + b;
-		a = b;
-		b = c;
-		++i;
+	volatile uintptr_t dummy;
+	uintptr_t i;
+	for (i = 0; i < (uintptr_t)arg; ++i) {
+		dummy = i;
 	}
-	return (void *)b;
+	return (void*)i;
 }
 
 int main(void)
@@ -85,8 +78,7 @@ int main(void)
                          * copy the job into its own data structures and assign
                          * it a Job Id.
                          */
-			struct fbr_job job = { job_id_counter++, fib_runner,
-					       NULL };
+			struct fbr_job job = { job_id_counter++, runner, (void *)(UINT16_MAX << 2) };
 
 			/* Here we push the job onto the job queue and get its
                          * job id. A Job Id < 0 indicates an error. See the comment
