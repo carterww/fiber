@@ -42,6 +42,8 @@ struct fbr_pool {
 	char _pad2[FBR_CACHELINE_BYTES - sizeof(int32_t)];
 	uint32_t thread_num;
 	char _pad3[FBR_CACHELINE_BYTES - sizeof(uint32_t)];
+	uint32_t thread_spawning_num;
+	char _pad4[FBR_CACHELINE_BYTES - sizeof(uint32_t)];
 
 	struct fbr_job_entries jobs_current;
 	struct fbr_thread_entries threads;

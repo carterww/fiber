@@ -136,7 +136,9 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 		&pool->threads, &thread_id, &thread_idx);
 	fbr_assert(thread_entry_found == true);
 	fbr_assert(thread_idx != UINT32_MAX);
-	ck_pr_inc_uint(&pool->thread_num);
+	ck_pr_inc_32(&pool->thread_num);
+	ck_pr_fence_atomic();
+	ck_pr_dec_32(&pool->thread_spawning_num);
 	entry = &pool->threads.array[thread_idx];
 
 	fbr_thread_cleanup_push(fbr_worker_cleanup, entry);
@@ -162,6 +164,7 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 	te_malloc_err = fbr_thread_entry_malloc(
 		&pool->threads, FBR_THREAD_TYPE_EXTERNAL, &thread_idx);
 	if (te_malloc_err == FBR_ENOMEM) {
+		ck_pr_dec_32(&pool->thread_spawning_num);
 		return FBR_ENOMEM;
 	}
 	fbr_assert(te_malloc_err == FBR_EOK);
@@ -170,7 +173,9 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 	thread_entry->thread_idx = thread_idx;
 	ck_pr_store_64(&thread_entry->thread.external.id, thread_id);
 	ck_pr_fence_store_atomic();
-	ck_pr_inc_uint(&pool->thread_num);
+	ck_pr_inc_32(&pool->thread_num);
+	ck_pr_fence_atomic();
+	ck_pr_dec_32(&pool->thread_spawning_num);
 
 	fbr_worker_runner_loop(pool);
 

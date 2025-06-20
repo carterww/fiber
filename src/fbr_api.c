@@ -151,6 +151,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt,
 	pool->tw_ql.items.queue_length = 0;
 	pool->thread_kill_num = 0;
 	pool->thread_num = 0;
+	pool->thread_spawning_num = opt->thread_num;
 	pool->thread_stack_size = opt->thread_stack_size_bytes;
 	pool->thread_max = opt->thread_max;
 	pool->callers_max = opt->callers_max;
@@ -231,6 +232,11 @@ init_error: {
 	(void)ck_pr_fas_int(&pool->active, 0);
 	ck_pr_barrier();
 
+	if (ck_pr_load_32(&pool->thread_spawning_num) > 0) {
+		uint32_t spawn_failed_num = opt->thread_num - worker_num;
+		ck_pr_sub_32(&pool->thread_spawning_num, spawn_failed_num);
+	}
+
 	/* If any workers were spawned then the last one to exit will be responsible
 	 * for cleaning up the other resources.
 	 */
@@ -263,7 +269,9 @@ FBR_ATTR_PUBLIC
 void fbr_free(fbr_pool_t *pool)
 {
 	int active;
-	uint32_t thread_num;
+	uint32_t thr_num;
+	uint32_t thr_sp_num;
+	fbr_errno_t wait_err = FBR_EOK;
 
 	if (pool == NULL) {
 		return;
@@ -273,11 +281,16 @@ void fbr_free(fbr_pool_t *pool)
 		return;
 	}
 	ck_pr_fence_atomic_load();
-	thread_num = ck_pr_load_uint(&pool->thread_num);
-	if (thread_num > 0) {
-		thread_num = INT_MAX;
-		fbr_futex_wake(&pool->tw_ql.items.queue_length, &thread_num);
-		fbr_errno_t wait_err = FBR_EOK;
+	while ((thr_sp_num = ck_pr_load_32(&pool->thread_spawning_num)) != 0) {
+		wait_err =
+			fbr_futex_wait(&pool->thread_spawning_num, thr_sp_num);
+	}
+	fbr_assert(wait_err == FBR_EOK || wait_err == FBR_EAGAIN);
+	ck_pr_fence_load();
+	thr_num = ck_pr_load_32(&pool->thread_num);
+	if (thr_num > 0) {
+		thr_num = INT_MAX;
+		fbr_futex_wake(&pool->tw_ql.items.queue_length, &thr_num);
 		while (ck_pr_load_32(&pool->free_futex) == 0) {
 			wait_err = fbr_futex_wait(&pool->free_futex, 0);
 		}
@@ -469,6 +482,12 @@ fbr_errno_t fbr_thread_join_pool(fbr_pool_t *pool, uint64_t thread_id)
 	if (!fbr_pool_active(pool)) {
 		return FBR_EINVAL;
 	}
+	ck_pr_inc_32(&pool->thread_spawning_num);
+	ck_pr_fence_atomic_load();
+	if (!fbr_pool_active(pool)) {
+		ck_pr_dec_32(&pool->thread_spawning_num);
+		return FBR_EINVAL;
+	}
 	return fbr_worker_runner_external(pool, thread_id);
 }
 
@@ -487,6 +506,12 @@ fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
 	if (!fbr_pool_active(pool)) {
 		return FBR_EINVAL;
 	}
+	ck_pr_add_32(&pool->thread_spawning_num, *tnum);
+	ck_pr_fence_atomic_load();
+	if (!fbr_pool_active(pool)) {
+		ck_pr_sub_32(&pool->thread_spawning_num, *tnum);
+		return FBR_EINVAL;
+	}
 
 	expected_start = *tnum;
 	worker_create_err = fbr_worker_create(pool, expected_start, tnum);
@@ -494,6 +519,8 @@ fbr_errno_t fbr_thread_add(fbr_pool_t *pool, uint32_t *tnum)
 		return worker_create_err;
 	}
 	if (expected_start != *tnum) {
+		uint32_t spawn_failed_num = expected_start - *tnum;
+		ck_pr_sub_32(&pool->thread_spawning_num, spawn_failed_num);
 		return FBR_ENO_RSC;
 	}
 	return FBR_EOK;
