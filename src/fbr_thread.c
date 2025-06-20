@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 Carter Williams
+
 #include "fbr_platform.h"
 
 #if defined(FBR_OS_LINUX) || defined(FBR_OS_FREEBSD)

@@ -1,4 +1,5 @@
-/* See LICENSE file for copyright and license details. */
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 Carter Williams
 
 /**
  * @file fbr_jq_ring.h

@@ -1,4 +1,6 @@
-#define _POSIX_C_SOURCE 199309L
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025 Carter Williams
+
 #define _GNU_SOURCE
 
 #include <errno.h>
