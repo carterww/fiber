@@ -132,7 +132,8 @@ typedef struct fbr_init_result fbr_init_result_t;
  *
  * @param options Pool initialization options to be passed to @ref fbr_init.
  *
- * @returns The minimum size the pool created from the given options will require.
+ * @returns The minimum size the pool created from the given options will require
+ *          or 0 if the options were invalid.
  */
 size_t fbr_buffer_size_min(const fbr_init_options_t *options);
 

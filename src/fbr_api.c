@@ -13,7 +13,6 @@
 #include "fbr_hp.h"
 #include "fbr_internal.h"
 #include "fbr_job.h"
-#include "fbr_platform.h"
 #include "fbr_thread.h"
 #include "fbr_thread_entries.h"
 #include "fbr_wait.h"
@@ -135,7 +134,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt,
 		}
 		owns_buffer = true;
 	}
-	if (!fbr_aligned(buffer, FBR_ALIGNMENT_MIN)) {
+	if (!fbr_aligned(buffer, fbr_alignof(*pool))) {
 		if (owns_buffer) {
 			opt->allocator.free(buffer);
 		}
@@ -581,7 +580,7 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 
 		/* The pool will not allow more than pool->thread_max to be spawned
 		 * so in theory this shouldn't happen. In reality there are cases
-		 * when the slots were full and and one was just freed behind the
+		 * when the slots were full and an entry was just freed behind the
 		 * iterator.
 		 *
 		 * We won't retry here because the caller should make that decision.

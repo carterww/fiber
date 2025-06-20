@@ -1,4 +1,3 @@
-#include "fbr_debug.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -9,6 +8,7 @@
 
 #include "fbr_bm_alloc.h"
 #include "fbr_cc.h"
+#include "fbr_debug.h"
 #include "fbr_job.h"
 #include "fbr_platform.h"
 
