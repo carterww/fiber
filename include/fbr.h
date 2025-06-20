@@ -158,9 +158,11 @@ size_t fbr_buffer_size_min(const fbr_init_options_t *options);
  *
  * @retval FBR_EOK              Successfully created the thread pool and started
  *                              @ref fbr_init_options::thread_num threads.
- * @retval FBR_ENULL_ARG        `options` is `NULL` or one of
+ * @retval FBR_ENULL_ARG        `options` is `NULL`, one of
  *                              @ref fbr_init_options::queue_ops's function pointers
- *                              is `NULL`.
+ *                              is `NULL`, or `buffer` is `NULL` and
+ *                              @ref fbr_allocator::malloc or @ref fbr_allocator::free
+ *                              was `NULL`.
  * @retval FBR_EINVAL           `buffer` was not properly aligned.
  * @retval FBR_EINVAL           @ref fbr_init_options::thread_max is `0`,
  *                              @ref fbr_init_options::callers_max is `0`, or
@@ -168,8 +170,6 @@ size_t fbr_buffer_size_min(const fbr_init_options_t *options);
  *                              @ref fbr_init_options::thread_max.
  * @retval FBR_EINVLD_SIZE      `buffer` was not `NULL` and `buffer_size` is smaller
  *                               than @ref fbr_buffer_size_min's return value.
- * @retval FBR_ENO_ALLOC        `buffer` was `NULL` and @ref fbr_allocator::malloc
- *                               or @ref fbr_allocator::free was `NULL`.
  * @retval FBR_ENO_MEM          `buffer` was `NULL` and @ref fbr_allocator::malloc
  *                               returned `NULL`.
  * @retval FBR_ENO_MEM          A thread could not be spawned because there was no

@@ -125,7 +125,7 @@ struct fbr_init_result fbr_init(const struct fbr_init_options *opt,
 	if (buffer == NULL) {
 		if (opt->allocator.malloc == NULL ||
 		    opt->allocator.free == NULL) {
-			res.error = FBR_ENO_ALLOC;
+			res.error = FBR_ENULL_ARG;
 			return res;
 		}
 		buffer = opt->allocator.malloc(min_buffer_size);
@@ -573,7 +573,7 @@ uint32_t fbr_thread_num(const fbr_pool_t *pool)
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	return ck_pr_load_uint(&pool->thread_num);
+	return ck_pr_load_32(&pool->thread_num);
 }
 
 FBR_ATTR_PUBLIC
@@ -582,7 +582,7 @@ uint32_t fbr_thread_max(const fbr_pool_t *pool)
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	return ck_pr_load_uint(&pool->thread_max);
+	return ck_pr_load_32(&pool->thread_max);
 }
 
 FBR_ATTR_PUBLIC
@@ -591,7 +591,7 @@ uint32_t fbr_callers_max(const fbr_pool_t *pool)
 	if (pool == NULL || !fbr_pool_active(pool)) {
 		return 0;
 	}
-	return ck_pr_load_uint(&pool->callers_max);
+	return ck_pr_load_32(&pool->callers_max);
 }
 
 static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,

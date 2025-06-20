@@ -13,7 +13,7 @@
 /* Helper macro to make exiting on error easier */
 #define EXIT_ERR(err)         \
 	if (err != FBR_EOK) { \
-		exit(err);    \
+		exit((int)err);    \
 	}
 
 #define FIBER_JOB_QUEUE_LENGTH (1024)
