@@ -600,8 +600,6 @@ static fbr_errno_t fbr_worker_create(struct fbr_pool *pool, uint32_t num,
 		if (err != FBR_EOK) {
 			return err;
 		}
-		int prev_started = ck_pr_fas_int(&thread_entry->started, 1);
-		fbr_assert(prev_started == 0);
 	}
 	return FBR_EOK;
 }

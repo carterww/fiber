@@ -29,7 +29,6 @@ struct fbr_thread_external {
 
 struct fbr_thread {
 	enum fbr_thread_type type;
-	int started;
 	union {
 		struct fbr_thread_internal internal;
 		struct fbr_thread_external external;
@@ -66,7 +65,6 @@ inline static void fbr_thread_entries_init(struct fbr_thread_entries *te,
 	te->array = arr;
 	for (uint32_t i = 0; i < thread_max; ++i) {
 		te->array[i].type = FBR_THREAD_TYPE_NONE;
-		te->array[i].started = 0;
 	}
 }
 
@@ -133,8 +131,6 @@ inline static void fbr_thread_entry_free(struct fbr_thread_entries *te,
 	t = &te->array[idx];
 	type_int = ck_pr_load_int((int *)&t->type);
 	type = (enum fbr_thread_type)type_int;
-	ck_pr_store_int(&t->started, 0);
-	ck_pr_fence_store();
 	ck_pr_store_int((int *)&t->type, (int)FBR_THREAD_TYPE_NONE);
 	ck_pr_fence_memory();
 	fbr_bm_free(&te->meta, idx);

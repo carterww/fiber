@@ -136,12 +136,6 @@ void *fbr_worker_runner_internal(void *pool_ptr)
 	ck_pr_inc_uint(&pool->thread_num);
 	entry = &pool->threads.array[thread_idx];
 
-	/* A race is possible if we don't wait for this to be
-	 * true.
-	 */
-	while (ck_pr_load_int(&entry->started) == 0)
-		;
-
 	fbr_thread_cleanup_push(fbr_worker_cleanup, entry);
 
 	fbr_worker_runner_loop(pool);
@@ -169,7 +163,6 @@ fbr_errno_t fbr_worker_runner_external(struct fbr_pool *pool,
 	}
 	fbr_assert(te_malloc_err == FBR_EOK);
 	thread_entry = &pool->threads.array[thread_idx];
-	thread_entry->started = 1;
 	thread_entry->pool = pool;
 	thread_entry->thread_idx = thread_idx;
 	ck_pr_store_64(&thread_entry->thread.external.id, thread_id);
